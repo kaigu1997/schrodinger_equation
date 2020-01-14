@@ -43,9 +43,9 @@ ComplexMatrix operator/(const RealMatrix& lhs, const Complex& rhs);
 class RealMatrix
 {
 private:
-    double* content;
     int length;
     int nelements;
+    double* content;
 public:
     // default constructor with all zero
     RealMatrix(const int size);
@@ -93,9 +93,9 @@ public:
 class ComplexMatrix
 {
 private:
-    Complex* content;
     int length;
     int nelements;
+    Complex* content;
 public:
     // default constructor with all zero
     ComplexMatrix(const int size);

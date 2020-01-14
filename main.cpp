@@ -145,6 +145,9 @@ int main(void)
     // read interaction region
     const double xmin = read_double(in);
     const double xmax = read_double(in);
+    clog << "The particle weighes " << mass <<" a.u.," << endl
+        << "starting from " << x0 << "with initial momentum " << p0 << '.' << endl
+        << "Initial width of x and p are " << SigmaX << " and " << SigmaP << ", respectively." << endl;
 
     // read whether have absorb potential or not
     const bool Absorbed = read_absorb(in);
@@ -169,7 +172,7 @@ int main(void)
     {
         GridCoordinate[i] = xmin + dx * (i - AbsorbingGrid);
     }
-    clog << "dx = " << dx << ", and there is overall " << NGrids << " Grids." << endl;
+    clog << "dx = " << dx << ", and there is overall " << NGrids << " grids." << endl;
     // construct the initial wavepacket: gaussian on the ground state PES
     // psi(x)=exp(-((x-x0)/2sigma_x)^2+i*p0*x/hbar)/sqrt(sqrt(2*pi)*sigma_x)
     // as on the grids, the normalization needs redoing
@@ -183,16 +186,16 @@ int main(void)
 
     // read dt. criteria is from J. Comput. Phys., 1983, 52(1): 35-53.
     const double dt = cutoff(min(read_double(in), 0.2 * 2.0 * mass * hbar / pow(p0max, 2)));
-    clog << "dt = " << dt << endl;
     // total evolving time and output time, in unit of a.u.
     const double TotalTime = read_double(in);
     const double PsiOutputTime = read_double(in);
     const double PhaseOutputTime = read_double(in);
     // calculate corresponding dt of the above (how many dt they have)
     // when output phase space, should also output Psi for less calculation
-    const int TotalStep = static_cast<int>(TotalTime / dt) + 1;
-    const int PsiOutputStep = static_cast<int>(PsiOutputTime / dt) + 1;
-    const int PhaseOutputStep = static_cast<int>(PhaseOutputTime / PsiOutputTime) * (PsiOutputStep - 1) + 1;
+    const int TotalStep = static_cast<int>(TotalTime / dt);
+    const int PsiOutputStep = static_cast<int>(PsiOutputTime / dt);
+    const int PhaseOutputStep = static_cast<int>(PhaseOutputTime / PsiOutputTime) * PsiOutputStep;
+    clog << "dt = " << dt << ", and there is overall " << TotalStep << " time steps." << endl;;
 
     // read representation where doing dynamics
     const Representation HamiltonianType = read_represent(in);
@@ -278,6 +281,7 @@ int main(void)
             }
         }
     }
+    clog << "Finish initialization. Begin evolving." << endl << show_time;
 
 
     // evolve; if H is hermitian, diagonal; otherwise, RK4
@@ -329,6 +333,8 @@ int main(void)
             // check if calculating phase space distribution
             if (iStep % PhaseOutputStep == 0)
             {
+                // print on the screen for monitoring
+                clog << "t = " << dt * iStep << endl;
                 PhaseOutput << iStep * dt;
                 // Wigner Transformation: P(x,p)=int{dy*exp(2ipy/hbar)<x-y|rho|x+y>}/(pi*hbar)
                 // the interval of p is pi*hbar/dx*[-1,1), dp=2*pi*hbar/(xmax-xmin)
@@ -351,6 +357,15 @@ int main(void)
                 PhaseOutput << endl;
             }
         }
+        // after evolution, calculating the population
+        cout << p0;
+        for (int i = 0; i < NumPES; i++)
+        {
+            Complex InnerProd;
+            cblas_zdotc_sub(NGrids, psi_t + i * NGrids, 1, psi_t + i * NGrids, 1, &InnerProd);
+            cout << ' ' << InnerProd.real() << endl;
+        }
+        clog << "Finish evolution." << endl << show_time << endl;
         delete[] PropaEig;
         delete[] psi_t;
         delete[] exp_iHdt;
