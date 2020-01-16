@@ -6,7 +6,7 @@
 // [2]J. Chem. Phys., 2002, 117(21): 9552-9559
 // and [3]J. Chem. Phys., 2004, 120(5): 2247-2254.
 // This program could be used to solve
-// exact solution under diabatic/adiabatic/force basis.
+// exact solution under diabatic basis ONLY.
 // It requires C++17 or newer C++ standards when compiling
 // and needs connection to Intel(R) Math Kernel Library
 // (MKL) by whatever methods: icpc/msvc/gcc -l.
@@ -61,35 +61,6 @@ static inline bool read_absorb(istream& is)
     return Absorbed;
 }
 
-// check if absorbing potential is used 
-static inline Representation read_represent(istream& is)
-{
-    string buffer;
-    string Represent;
-    Representation HamiltonianType;
-    getline(is, buffer);
-    is >> Represent;
-    getline(is, buffer);
-    if (strcmp(Represent.c_str(), "diabatic") == 0)
-    {
-        HamiltonianType = Diabatic;
-    }
-    else if (strcmp(Represent.c_str(), "adiabatic") == 0)
-    {
-        HamiltonianType = Adiabatic;
-    }
-    else if (strcmp(Represent.c_str(), "force") == 0)
-    {
-        HamiltonianType = Force;
-    }
-    else
-    {
-        cerr << "UNKNOWN REPRESENTATION TO DO DYNAMICS" << endl;
-        exit(302);
-    }
-    return HamiltonianType;
-}
-
 // do the cutoff, e.g. 0.2493 -> 0.2, 1.5364 -> 1
 static inline double cutoff(const double val)
 {
@@ -129,6 +100,7 @@ int main(void)
     ofstream PsiOutput("psi.txt"), PhaseOutput("phase.txt");
     // in: the input file
     ifstream in("input");
+    in.sync_with_stdio(false);
     // read mass: the mass of the bath
     const double mass = read_double(in);
     // read initial wavepacket info
@@ -145,8 +117,8 @@ int main(void)
     // read interaction region
     const double xmin = read_double(in);
     const double xmax = read_double(in);
-    clog << "The particle weighes " << mass <<" a.u.," << endl
-        << "starting from " << x0 << "with initial momentum " << p0 << '.' << endl
+    clog << "The particle weighes " << mass << " a.u.," << endl
+        << "starting from " << x0 << " with initial momentum " << p0 << '.' << endl
         << "Initial width of x and p are " << SigmaX << " and " << SigmaP << ", respectively." << endl;
 
     // read whether have absorb potential or not
@@ -190,6 +162,8 @@ int main(void)
     const double TotalTime = read_double(in);
     const double PsiOutputTime = read_double(in);
     const double PhaseOutputTime = read_double(in);
+    // finish reading
+    in.close();
     // calculate corresponding dt of the above (how many dt they have)
     // when output phase space, should also output Psi for less calculation
     const int TotalStep = static_cast<int>(TotalTime / dt);
@@ -197,20 +171,16 @@ int main(void)
     const int PhaseOutputStep = static_cast<int>(PhaseOutputTime / PsiOutputTime) * PsiOutputStep;
     clog << "dt = " << dt << ", and there is overall " << TotalStep << " time steps." << endl;;
 
-    // read representation where doing dynamics
-    const Representation HamiltonianType = read_represent(in);
-    // finish reading
-    in.close();
     // construct the Hamiltonian. n'=nn, m'=mm
-    // diabatic/adiabatic/force-basis Hamiltonian
-    // used for propagator: dc/dt=-iHc/hbar
+    // diabatic Hamiltonian used for propagator
+    // dc/dt=-iHc/hbar => c(t)=e^(-iHt)c(0)
     // c is the coefficient, c[m*NGrids+n] is
     // the nth grid on the mth surface
     ComplexMatrix Hamiltonian(dim);
     // 1. V_{mm'}(R_n), n=n'
     for (int n = 0; n < NGrids; n++)
     {
-        const RealMatrix&& Vn = PES[HamiltonianType](GridCoordinate[n]);
+        const RealMatrix&& Vn = DiaPotential(GridCoordinate[n]);
         for (int m = 0; m < NumPES; m++)
         {
             for (int mm = 0; mm < NumPES; mm++)
@@ -219,39 +189,7 @@ int main(void)
             }
         }
     }
-    // 2. -hbar^2/2M*(d^2)_(mm'),if n=n'
-    // or +hbar^2/M*d(mm'n)(-1)^(n+n')/(n'-n)/dx, if n!=n'
-    // here, d2n=D^2(Rn),sum_k(d(mkn)d(km'n))=D^2(Rn)[m][m']
-    if (HamiltonianType != Diabatic)
-    {
-        for (int n = 0; n < NGrids; n++)
-        {
-            const RealMatrix&& dn = NAC[HamiltonianType](GridCoordinate[n]);
-            RealMatrix d2n(NumPES);
-            cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, NumPES, NumPES, NumPES, 1.0, dn.data(), NumPES, dn.data(), NumPES, 0.0, d2n.data(), NumPES);
-            for (int m = 0; m < NumPES; m++)
-            {
-                for (int nn = 0; nn < NGrids; nn++)
-                {
-                    if (nn == n)
-                    {
-                        for (int mm = 0; mm < NumPES; mm++)
-                        {
-                            Hamiltonian(m * NGrids + n, mm * NGrids + nn) -= hbar * hbar / 2 / mass * d2n(m, mm);
-                        }
-                    }
-                    else
-                    {
-                        for (int mm = 0; mm < NumPES; mm++)
-                        {
-                            Hamiltonian(m * NGrids + n, mm * NGrids + nn) += pow_minus_one(nn - n) * hbar * hbar / (nn - n) / dx / mass * dn(m, mm);
-                        }
-                    }
-                }
-            }
-        }
-    }
-    // 3. d2/dx2 (over all pes)
+    // 2. d2/dx2 (over all pes)
     for (int m = 0; m < NumPES; m++)
     {
         for (int n = 0; n < NGrids; n++)
@@ -285,7 +223,7 @@ int main(void)
 
 
     // evolve; if H is hermitian, diagonal; otherwise, RK4
-    if (Absorbed != true && HamiltonianType == Diabatic)
+    if (Absorbed != true)
     {
         // diagonalize H
         ComplexMatrix EigVec(Hamiltonian);
@@ -363,8 +301,9 @@ int main(void)
         {
             Complex InnerProd;
             cblas_zdotc_sub(NGrids, psi_t + i * NGrids, 1, psi_t + i * NGrids, 1, &InnerProd);
-            cout << ' ' << InnerProd.real() << endl;
+            cout << ' ' << InnerProd.real();
         }
+        cout << endl;
         clog << "Finish evolution." << endl << show_time << endl;
         delete[] PropaEig;
         delete[] psi_t;

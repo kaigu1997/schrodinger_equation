@@ -1,5 +1,5 @@
 compiler = icpc
-cpl_cmd := -mkl -std=c++17 -Wall -O3 -m64
+cpl_cmd := -mkl -std=c++17 -Wall -Wextra -Wconversion -Wshadow -O3
 
 dvr: matrix.o general.o main.o
 	${compiler} main.o general.o matrix.o ${cpl_cmd} -o dvr

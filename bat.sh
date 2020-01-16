@@ -34,5 +34,6 @@ Representation:(diabatic, adiabatic, force)
 diabatic
 END_FILE
     ./dvr >> output 2>>log
+    echo "Finished 10.0 * p = $i.0"
 done
 
