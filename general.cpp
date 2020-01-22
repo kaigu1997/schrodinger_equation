@@ -1,119 +1,186 @@
-// implementation of general.h:
-// diabatic PES and Hamiltonians
+// implementation of general.h
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <cstring>
+#include <ctime>
 #include <iostream>
+#include <memory>
 #include <mkl.h>
+#include <string>
+#include <tuple>
+#include <utility>
 #include "general.h"
 #include "matrix.h"
+#include "pes.h"
+using namespace std;
 
-//*Model 1
-// constants in the diabatic Potential
-static const double A = 0.01, B = 1.6, C = 0.005, D = 1.0;
-// subsystem diabatic Potential, the force, and hessian
-// the "forces" are negative derivative over x
-// the hessian matrix is the second derivative over x
-RealMatrix DiaPotential(const double x)
-{
-    RealMatrix Potential(NumPES);
-    Potential(0, 1) = Potential(1, 0) = C * exp(-D * x * x);
-    Potential(0, 0) = sgn(x) * A * (1.0 - exp(-sgn(x) * B * x));
-    Potential(1, 1) = -Potential(0, 0);
-    return Potential;
-}
-static RealMatrix DiaForce(const double x)
-{
-    RealMatrix Force(NumPES);
-    Force(0, 1) = Force(1, 0) = 2.0 * C * D * x * exp(-D * x * x);
-    Force(0, 0) = -A * B * exp(-sgn(x) * B * x);
-    Force(1, 1) = -Force(0, 0);
-    return Force;
-}
-static RealMatrix DiaHesse(const double x)
-{
-    RealMatrix Hesse(NumPES);
-    Hesse(0, 1) = Hesse(1, 0) = 2 * C * D * (2 * D * x * x - 1) * exp(-D * x * x);
-    Hesse(0, 0) = -sgn(x) * A * B * B * exp(-sgn(x) * B * x);
-    Hesse(1, 1) = -Hesse(0, 0);
-    return Hesse;
-}// */
+// utility functions
 
-/*Model 2
-// constants in the diabatic Potential
-static const double A = 0.10, B = 0.28, C = 0.015, D = 0.06, E = 0.05;
-// subsystem diabatic Potential, the force, and hessian
-// the "forces" are negative derivative over x
-// the hessian matrix is the second derivative over x
-RealMatrix DiaPotential(const double x)
+// returns (-1)^n
+int pow_minus_one(const int n)
 {
-    RealMatrix Potential(NumPES);
-    Potential(0, 1) = Potential(1, 0) = C * exp(-D * x * x);
-    Potential(1, 1) = E - A * exp(-B * x * x);
-    return Potential;
+    return n % 2 == 0 ? 1 : -1;
 }
-static RealMatrix DiaForce(const double x)
-{
-    RealMatrix Force(NumPES);
-    Force(0, 1) = Force(1, 0) = 2 * C * D * x * exp(-D * x * x);
-    Force(1, 1) = -2 * A * B * x * exp(-B * x * x);
-    return Force;
-}
-static RealMatrix DiaHesse(const double x)
-{
-    RealMatrix Hesse(NumPES);
-    Hesse(0, 1) = Hesse(1, 0) = 2 * C * D * (2 * D * x * x - 1) * exp(-D * x * x);
-    Hesse(1, 1) = -2 * A * B * (2 * B * x * x - 1) * exp(-B * x * x);
-    return Hesse;
-}// */
 
-/*Model 3
-// constants in the diabatic Potential
-static const double A = 6e-4, B = 0.10, C = 0.90;
-// subsystem diabatic Potential, the force, and hessian
-// the "forces" are negative derivative over x
-// the hessian matrix is the second derivative over x
-RealMatrix DiaPotential(const double x)
+// do the cutoff, e.g. 0.2493 -> 0.2, 1.5364 -> 1
+double cutoff(const double val)
 {
-    RealMatrix Potential(NumPES);
-    Potential(0, 0) = A;
-    Potential(1, 1) = -A;
-    Potential(0, 1) = Potential(1, 0) = B * (1 - sgn(x) * (exp(-sgn(x) * C * x) - 1));
-    return Potential;
+    double pownum = pow(10, static_cast<int>(floor(log10(val))));
+    return static_cast<int>(val / pownum) * pownum;
 }
-static RealMatrix DiaForce(const double x)
-{
-    RealMatrix Force(NumPES);
-    Force(0, 1) = Force(1, 0) = -B * C * exp(-sgn(x) * C * x);
-    return Force;
-}
-static RealMatrix DiaHesse(const double x)
-{
-    RealMatrix Hesse(NumPES);
-    Hesse(0, 1) = Hesse(1, 0) = -sgn(x) * B * C * C * exp(-sgn(x) * C * x);
-    return Hesse;
-}// */
 
-// the absorbing potential: V->V-iE
-// Here is E only. E is diagonal
-// E is zero in the interacting region
-// E=hbar^2/2m*(2*pi/arl)^2*y(x)
-// x=2*d*kmin*(r-r1)=c(r-r1)/arl
-// d=c/4pi -> arl=2pi/kmin=h/pmin
-// y(x)=sqrt(pow(cn(x/sqrt(2),1/sqrt(2)),-4)-1)
-// ~4/(c-x)^2+4/(c+x)^2-8/c^2 from
-// J. Chem. Phys., 2004, 120(5): 2247-2254,
-// c=sqrt(2)*K(1/sqrt(2))
-double AbsorbPotential(const double mass, const double xmin, const double xmax, const double AbsorbingRegionLength, const double r)
+
+// I/O functions
+
+// read a double: mass, x0, etc
+double read_double(istream& is)
 {
-    static const double c = sqrt(2) * comp_ellint_1(1.0 / sqrt(2));
-    // in the interacting region, no AP
-    if (r > xmin && r < xmax)
+    static string buffer;
+    static double temp;
+    getline(is, buffer);
+    is >> temp;
+    getline(is, buffer);
+    return temp;
+}
+
+// check if absorbing potential is used or not
+bool read_absorb(istream& is)
+{
+    string buffer, WhetherAbsorb;
+    bool Absorbed;
+    getline(is, buffer);
+    is >> WhetherAbsorb;
+    getline(is, buffer);
+    if (strcmp(WhetherAbsorb.c_str(), "on") == 0)
     {
-        return 0;
+        Absorbed = true;
     }
-    // otherwise, return E(x)_ii
-    double x = c * (r < xmin ? r - xmin : r - xmax) / AbsorbingRegionLength;
-    return pow(PlanckH / AbsorbingRegionLength, 2) * 2.0 / mass
-        * (1.0 / pow(c - x, 2) + 1.0 / pow(c + x, 2) - 2.0 / pow(c, 2));
+    else if (strcmp(WhetherAbsorb.c_str(), "off") == 0)
+    {
+        Absorbed = false;
+    }
+    else
+    {
+        cerr << "UNKNOWN CASE OF ABSORBING POTENTIAL" << endl;
+        exit(301);
+    }
+    return Absorbed;
+}
+
+
+// read the time values (dt, OutputTime) and
+// based on having the absorbing potential or not
+// to return the value that are really used
+TimeParameter read_time(istream& is, const double mass, const double p0max, const bool Absorbed)
+{
+    // read dt. criteria is from J. Comput. Phys., 1983, 52(1): 35-53.
+    double dt = cutoff(min(read_double(is), 0.2 * 2.0 * mass * hbar / pow(p0max, 2)));
+    // total evolving time and output time, in unit of a.u.
+    double TotalTime = read_double(is);
+    double PsiOutputTime = read_double(is);
+    double PhaseOutputTime = read_double(is); 
+    // if absorbed potential is not used, then H is diagonalizable, and dt are not needed
+    if (Absorbed == false)
+    {
+        dt = PsiOutputTime;
+    }
+    return make_tuple(dt, TotalTime, PsiOutputTime, PhaseOutputTime);
+}
+
+// to print current time
+ostream& show_time(ostream& os)
+{
+    auto time = chrono::system_clock::to_time_t(chrono::system_clock::now());
+    os << ctime(&time);
+    return os;
+}
+
+
+// evolution related function
+
+// initialize the gaussian wavepacket, and normalize it
+ComplexVector wavefunction_initialization(const int NGrids, const double* GridCoordinate, const double dx, const double x0, const double p0, const double SigmaX)
+{
+    // generate the array to save the initial wavepacket
+    Complex* Psi0 = new Complex[NGrids * NumPES];
+    // for higher PES, the initial wavefunction is zero
+    memset(Psi0 + NGrids, 0, NGrids * (NumPES - 1) * sizeof(Complex));
+    // for ground state, it is a gaussian. psi(x)=A*exp(-(x-x0)^2/4sigmax^2+ip0x/hbar)
+    for (int i = 0; i < NGrids; i++)
+    {
+        Psi0[i] = exp(Complex(-pow((GridCoordinate[i] - x0) / 2 / SigmaX, 2), p0 * GridCoordinate[i] / hbar));
+    }
+    // normalization
+    Complex PsiSquare;
+    cblas_zdotc_sub(NGrids, Psi0, 1, Psi0, 1, &PsiSquare);
+    double NormFactor = sqrt(PsiSquare.real() * dx);
+    for (int i = 0; i < NGrids; i++)
+    {
+        Psi0[i] /= NormFactor;
+    }
+    // give it to a unique_ptr
+    return ComplexVector(Psi0);
+}
+
+// construct the Hamiltonian
+ComplexMatrix Hamiltonian_construction(const int NGrids, const double* GridCoordinate, const double dx, const double mass, const bool Absorbed, const double xmin, const double xmax, const double AbsorbingRegionLength)
+{
+    ComplexMatrix Hamiltonian(NGrids * NumPES);
+    // 1. V_{mm'}(R_n), n=n'
+    for (int n = 0; n < NGrids; n++)
+    {
+        const RealMatrix&& Vn = DiaPotential(GridCoordinate[n]);
+        for (int m = 0; m < NumPES; m++)
+        {
+            for (int mm = 0; mm < NumPES; mm++)
+            {
+                Hamiltonian(m * NGrids + n, mm * NGrids + n) += Vn(m, mm);
+            }
+        }
+    }
+    // 2. d2/dx2 (over all pes)
+    for (int m = 0; m < NumPES; m++)
+    {
+        for (int n = 0; n < NGrids; n++)
+        {
+            for (int nn = 0; nn < NGrids; nn++)
+            {
+                if (nn == n)
+                {
+                    Hamiltonian(m * NGrids + n, m * NGrids + nn) += pow(pi * hbar / dx, 2) / 6.0 / mass;
+                }
+                else
+                {
+                    Hamiltonian(m * NGrids + n, m * NGrids + nn) += pow_minus_one(nn - n) * pow(hbar / dx / (nn - n), 2) / mass;
+                }
+            }
+        }
+    }
+    // add absorbing potential
+    if (Absorbed == true)
+    {
+        for (int n = 0; n < NGrids; n++)
+        {
+            const double&& An = AbsorbPotential(mass, xmin, xmax, AbsorbingRegionLength, GridCoordinate[n]);
+            for (int m = 0; m < NumPES; m++)
+            {
+                Hamiltonian(m * NGrids + n, m * NGrids + n) -= 1.0i * An;
+            }
+        }
+    }
+    return Hamiltonian;
+}
+
+// calculate the population on each PES
+void calculate_popultion(const int NGrids, const Complex* AdiabaticPsi, double* Population)
+{
+    static Complex InnerProduct;
+    // calculate the inner product of each PES
+    for (int i = 0; i < NumPES; i++)
+    {
+        cblas_zdotc_sub(NGrids, AdiabaticPsi + i * NGrids, 1, AdiabaticPsi + i * NGrids, 1, &InnerProduct);
+        Population[i] = InnerProduct.real();
+    }
 }

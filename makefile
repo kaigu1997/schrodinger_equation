@@ -1,14 +1,24 @@
-compiler = icpc
-cpl_cmd := -mkl -std=c++17 -Wall -Wextra -Wconversion -Wshadow -O3
+Compiler := icpc
+MakeFlags := -mkl -std=c++17 -Wall -Wextra -Wconversion -Wshadow -Werror -O3
+Objects := matrix.o general.o pes.o main.o
+HeaderFile := matrix.h general.h pes.h
 
-dvr: matrix.o general.o main.o
-	${compiler} main.o general.o matrix.o ${cpl_cmd} -o dvr
-main.o: main.cpp matrix.h general.h
-	${compiler} -c main.cpp ${cpl_cmd} -g -o main.o
-general.o: general.cpp general.h matrix.h
-	${compiler} -c general.cpp ${cpl_cmd} -g -o general.o
+dvr: ${Objects}
+	${Compiler} ${Objects} ${MakeFlags} -o dvr
+main.o: main.cpp ${HeaderFile}
+	${Compiler} -c main.cpp ${MakeFlags} -g -o main.o
+pes.o: pes.cpp ${HeaderFile}
+	${Compiler} -c pes.cpp ${MakeFlags} -g -o pes.o
+general.o: general.cpp ${HeaderFile}
+	${Compiler} -c general.cpp ${MakeFlags} -g -o general.o
 matrix.o: matrix.cpp matrix.h
-	${compiler} -c matrix.cpp ${cpl_cmd} -g -o matrix.o
+	${Compiler} -c matrix.cpp ${MakeFlags} -g -o matrix.o
 
+.PHONY: clean git
 clean:
-	rm *.o log output *.txt
+	-rm *.o
+clean_result:
+	-rm log output *.txt *.gif
+git:
+	git add *.h *.cpp makefile *.sh *.py .gitignore
+

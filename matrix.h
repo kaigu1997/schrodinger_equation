@@ -26,11 +26,8 @@ const MKL_INT64 mode = VML_HA;
 class RealMatrix;
 class ComplexMatrix;
 
-// transfrom a double array to a complex array using lambda
-inline void real_to_complex(const double* da, Complex* ca, const int length)
-{
-    generate(ca, ca + length, [i = 0, da](void)mutable->Complex{ return da[i++]; });
-}
+// transfrom a double array to a complex array
+void real_to_complex(const double* da, Complex* ca, const int length);
 
 // declaration of functions that have
 // something to do with both kinds of matrix
@@ -53,6 +50,8 @@ public:
     RealMatrix(const RealMatrix& matrix);
     // quasi copy constructor
     RealMatrix(const int size, const double* array);
+    // move constructor
+    RealMatrix(RealMatrix&& matrix);
     // one element is give number and the other are all zero
     RealMatrix(const int size, const Index& idx, const double& val);
     // destructor
@@ -65,9 +64,9 @@ public:
     // copy to an array
     void transform_to_1d(double* array) const;
     // overload operator(): return the element (=[][])
-    double& operator()(const int& idx1, const int& idx2);
+    double& operator()(const int idx1, const int idx2);
     double& operator()(const Index& idx);
-    const double& operator()(const int& idx1, const int& idx2) const;
+    const double& operator()(const int idx1, const int idx2) const;
     const double& operator()(const Index& idx) const;
     // overload numerical calculation by VMF
     friend RealMatrix operator+(const RealMatrix& lhs, const RealMatrix& rhs);
@@ -107,6 +106,8 @@ public:
     ComplexMatrix(const RealMatrix& matrix);
     // quasi copy constructor from real matrix
     ComplexMatrix(const int size, const double* array);
+    // move constructor
+    ComplexMatrix(ComplexMatrix&& matrix);
     // one element is give number and the other are all zero
     ComplexMatrix(const int size, const Index& idx, const Complex& val);
     // destructor
@@ -119,9 +120,9 @@ public:
     // copy to an array
     void transform_to_1d(Complex* array) const;
     // overload operator(): return the element (=[][])
-    Complex& operator()(const int& idx1, const int& idx2);
+    Complex& operator()(const int idx1, const int idx2);
     Complex& operator()(const Index& idx);
-    const Complex& operator()(const int& idx1, const int& idx2) const;
+    const Complex& operator()(const int idx1, const int idx2) const;
     const Complex& operator()(const Index& idx) const;
     // overload numerical calculation
     friend ComplexMatrix operator+(const ComplexMatrix& lhs, const ComplexMatrix& rhs);

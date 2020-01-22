@@ -9,6 +9,13 @@
 #include "matrix.h"
 using namespace std;
 
+// transfrom a double array to a complex array 
+// by using lambda expression
+void real_to_complex(const double* da, Complex* ca, const int length)
+{
+    generate(ca, ca + length, [i = 0, da](void)mutable->Complex{ return da[i++]; });
+}
+
 // functions that have something to do with both kinds of matrix
 ComplexMatrix operator*(const RealMatrix& lhs, const Complex& rhs)
 {
@@ -45,10 +52,10 @@ RealMatrix::RealMatrix(const int size)
 }
 
 // copy constructor
-RealMatrix::RealMatrix(const RealMatrix& rm)
-	: length(rm.length), nelements(rm.nelements), content(new double[nelements])
+RealMatrix::RealMatrix(const RealMatrix& matrix)
+	: length(matrix.length), nelements(matrix.nelements), content(new double[nelements])
 {
-	copy(rm.content, rm.content + nelements, content);
+	copy(matrix.content, matrix.content + nelements, content);
 }
 
 // quasi copy constructor
@@ -56,6 +63,12 @@ RealMatrix::RealMatrix(const int size, const double* array)
 	: length(size), nelements(length * length), content(new double[nelements])
 {
 	copy(array, array + nelements, content);
+}
+
+// move constructor
+RealMatrix::RealMatrix(RealMatrix&& matrix)
+	: length(move(matrix.length)), nelements(move(matrix.nelements)), content(move(matrix.content))
+{
 }
 
 // one element is give number and the other are all zero
@@ -95,7 +108,7 @@ void RealMatrix::transform_to_1d(double* array) const
 }
 
 // overload operator(): return the element (=[][])
-double& RealMatrix::operator()(const int& idx1, const int& idx2)
+double& RealMatrix::operator()(const int idx1, const int idx2)
 {
 	return content[idx1 * length + idx2];
 }
@@ -103,7 +116,7 @@ double& RealMatrix::operator()(const Index& idx)
 {
 	return content[idx.first * length + idx.second];
 }
-const double& RealMatrix::operator()(const int& idx1, const int& idx2) const
+const double& RealMatrix::operator()(const int idx1, const int idx2) const
 {
 	return content[idx1 * length + idx2];
 }
@@ -226,7 +239,7 @@ ComplexMatrix::ComplexMatrix(const int size)
 
 // copy constructor
 ComplexMatrix::ComplexMatrix(const ComplexMatrix& matrix)
-	: length(matrix.length), nelements(length * length), content(new Complex[nelements])
+	: length(matrix.length), nelements(matrix.nelements), content(new Complex[nelements])
 {
 	copy(matrix.content, matrix.content + matrix.nelements, content);
 }
@@ -251,6 +264,13 @@ ComplexMatrix::ComplexMatrix(const int size, const double* array)
 {
 	real_to_complex(array, content, nelements);
 }
+
+// move constructor
+ComplexMatrix::ComplexMatrix(ComplexMatrix&& matrix)
+	: length(move(matrix.length)), nelements(move(matrix.nelements)), content(move(matrix.content))
+{
+}
+
 
 // one element is give number and the other are all zero
 ComplexMatrix::ComplexMatrix(const int size, const Index& idx, const Complex& val)
@@ -289,7 +309,7 @@ void ComplexMatrix::transform_to_1d(Complex* array) const
 }
 
 // overload operator(): return the element (=[][])
-Complex& ComplexMatrix::operator()(const int& idx1, const int& idx2)
+Complex& ComplexMatrix::operator()(const int idx1, const int idx2)
 {
 	return content[idx1 * length + idx2];
 }
@@ -297,7 +317,7 @@ Complex& ComplexMatrix::operator()(const Index& idx)
 {
 	return content[idx.first * length + idx.second];
 }
-const Complex& ComplexMatrix::operator()(const int& idx1, const int& idx2) const
+const Complex& ComplexMatrix::operator()(const int idx1, const int idx2) const
 {
 	return content[idx1 * length + idx2];
 }

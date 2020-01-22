@@ -9,11 +9,10 @@
 // exact solution under diabatic basis ONLY.
 // It requires C++17 or newer C++ standards when compiling
 // and needs connection to Intel(R) Math Kernel Library
-// (MKL) by whatever methods: icpc/msvc/gcc -l.
-// Error code criteria: 100-199 for matrix, 
-// 200-299 for general, and 300-399 for for main.
+// (MKL) by whatever methods: icpc/msvc/gcc -I.
+// Error code criteria: 1XX for matrix, 
+// 2XX for general, 3XX for pes, and 4XX for main.
 
-#include <algorithm>
 #include <chrono>
 #include <ctime>
 #include <cstring>
@@ -23,70 +22,9 @@
 #include <iostream>
 #include <mkl.h>
 #include "general.h"
+#include "pes.h"
 #include "matrix.h"
 using namespace std;
-
-// read a double: mass, x0, etc
-static inline double read_double(istream& is)
-{
-    static string buffer;
-    static double temp;
-    getline(is, buffer);
-    is >> temp;
-    getline(is, buffer);
-    return temp;
-}
-
-// check if absorbing potential is used or not
-static inline bool read_absorb(istream& is)
-{
-    string buffer, WhetherAbsorb;
-    bool Absorbed;
-    getline(is, buffer);
-    is >> WhetherAbsorb;
-    getline(is, buffer);
-    if (strcmp(WhetherAbsorb.c_str(), "on") == 0)
-    {
-        Absorbed = true;
-    }
-    else if (strcmp(WhetherAbsorb.c_str(), "off") == 0)
-    {
-        Absorbed = false;
-    }
-    else
-    {
-        cerr << "UNKNOWN CASE OF ABSORBING POTENTIAL" << endl;
-        exit(301);
-    }
-    return Absorbed;
-}
-
-// do the cutoff, e.g. 0.2493 -> 0.2, 1.5364 -> 1
-static inline double cutoff(const double val)
-{
-    double pownum = pow(10, static_cast<int>(floor(log10(val))));
-    return static_cast<int>(val / pownum) * pownum;
-}
-
-// return the normalization factor
-static inline void normalization(Complex* Psi, const int size)
-{
-    Complex PsiSquare;
-    cblas_zdotc_sub(size, Psi, 1, Psi, 1, &PsiSquare);
-    double NormFactor = sqrt(PsiSquare.real());
-    for (int i = 0; i < size; i++)
-    {
-        Psi[i] /= NormFactor;
-    }
-}
-
-// to print current time
-ostream& show_time(ostream& os)
-{
-    auto time = chrono::system_clock::to_time_t(chrono::system_clock::now());
-    os << ctime(&time);
-    return os;
-}
 
 int main(void)
 {
@@ -98,6 +36,9 @@ int main(void)
     // In Phase space, each line is the PS-distribution at a moment:
     // t, P(x0,p0,t), P(x1,p0,t), ... P(x0,p1,t)...
     ofstream PsiOutput("psi.txt"), PhaseOutput("phase.txt");
+    // Grids contains each grid coordinate, one in a line
+    // Steps contains when is each step, also one in a line
+    ofstream Grids("x.txt"), Steps("t.txt");
     // in: the input file
     ifstream in("input");
     in.sync_with_stdio(false);
@@ -120,48 +61,52 @@ int main(void)
     clog << "The particle weighes " << mass << " a.u.," << endl
         << "starting from " << x0 << " with initial momentum " << p0 << '.' << endl
         << "Initial width of x and p are " << SigmaX << " and " << SigmaP << ", respectively." << endl;
-
-    // read whether have absorb potential or not
-    const bool Absorbed = read_absorb(in);
-    // absorbing region length from [2] and [3], determined by p0
-    const double AbsorbingRegionLength = PlanckH / p0min;
     // read grid spacing, should be "~ 4 to 5 grids per de Broglie wavelength"
     // and then do the cut off, e.g. 0.2493 -> 0.2, 1.5364 -> 1
     // and the number of grids are thus determined
     const double dx = cutoff(min(read_double(in), PlanckH / p0max / 5.0));
     // grids in [xmin, xmax]
     const int InteractingGrid = static_cast<int>((xmax - xmin) / dx) + 1;
+
+    // read whether have absorb potential or not
+    const bool Absorbed = read_absorb(in);
+    // absorbing region length from [2] and [3], determined by p0
+    const double AbsorbingRegionLength = [&]
+    {
+        if (Absorbed == true)
+        {
+            return PlanckH / p0min;
+        }
+        else
+        {
+            return 0.0;
+        }
+    }();
+    // total length is the interaction region + absorbing region
+    const double TotalLength = xmax - xmin + 2.0 * AbsorbingRegionLength;
     // grids in [xmin-arl, xmin) or (xmax, xmax+arl]. no absorb -> 0 grids
-    const int AbsorbingGrid = (Absorbed == true ? static_cast<int>(AbsorbingRegionLength / dx) : 0);
+    const int AbsorbingGrid = static_cast<int>(AbsorbingRegionLength / dx);
     // NGrids: number of grids in [xmin-arl, xmax+arl]
-    // dim: total number of elements (dimension) in Psi/H
     const int NGrids = InteractingGrid + 2 * AbsorbingGrid;
+    // dim: total number of elements (dimension) in Psi/H
     const int dim = NGrids * NumPES;
     // the coordinates of the grids, i.e. value of xi
     double* GridCoordinate = new double[NGrids];
-    // calculate the grid coordinates
+    // calculate the grid coordinates, and print them
     for (int i = 0; i < NGrids; i++)
     {
         GridCoordinate[i] = xmin + dx * (i - AbsorbingGrid);
+        Grids << GridCoordinate[i] << endl;
     }
     clog << "dx = " << dx << ", and there is overall " << NGrids << " grids." << endl;
-    // construct the initial wavepacket: gaussian on the ground state PES
-    // psi(x)=exp(-((x-x0)/2sigma_x)^2+i*p0*x/hbar)/sqrt(sqrt(2*pi)*sigma_x)
-    // as on the grids, the normalization needs redoing
-    Complex* Psi = new Complex[dim];
-    memset(Psi, 0, dim * sizeof(Complex));
-    for (int i = 0; i < NGrids; i++)
-    {
-        Psi[i] = exp(p0 * GridCoordinate[i] / hbar * 1.0i) * exp(-pow((GridCoordinate[i] - x0) / 2 / SigmaX, 2));
-    }
-    normalization(Psi, dim);
+    Grids.close();
 
-    // read dt. criteria is from J. Comput. Phys., 1983, 52(1): 35-53.
-    const double dt = cutoff(min(read_double(in), 0.2 * 2.0 * mass * hbar / pow(p0max, 2)));
-    // total evolving time and output time, in unit of a.u.
-    const double TotalTime = read_double(in);
-    const double PsiOutputTime = read_double(in);
-    const double PhaseOutputTime = read_double(in);
+    // read dt, evolving time and output time, in unit of a.u.
+    const auto&& ReadTime = read_time(in, mass, p0max, Absorbed);
+    const double dt = get<0>(ReadTime);
+    const double TotalTime = get<1>(ReadTime);
+    const double PsiOutputTime = get<2>(ReadTime);
+    const double PhaseOutputTime = get<3>(ReadTime);
     // finish reading
     in.close();
     // calculate corresponding dt of the above (how many dt they have)
@@ -169,117 +114,97 @@ int main(void)
     const int TotalStep = static_cast<int>(TotalTime / dt);
     const int PsiOutputStep = static_cast<int>(PsiOutputTime / dt);
     const int PhaseOutputStep = static_cast<int>(PhaseOutputTime / PsiOutputTime) * PsiOutputStep;
-    clog << "dt = " << dt << ", and there is overall " << TotalStep << " time steps." << endl;;
+    clog << "dt = " << dt << ", and there is overall " << TotalStep << " time steps." << endl;
 
+    // construct the initial wavepacket: gaussian on the ground state PES
+    // psi(x)=exp(-((x-x0)/2sigma_x)^2+i*p0*x/hbar)/sqrt(sqrt(2*pi)*sigma_x)
+    const ComplexVector Psi0 = wavefunction_initialization(NGrids, GridCoordinate, dx, x0, p0, SigmaX);
     // construct the Hamiltonian. n'=nn, m'=mm
     // diabatic Hamiltonian used for propagator
     // dc/dt=-iHc/hbar => c(t)=e^(-iHt)c(0)
     // c is the coefficient, c[m*NGrids+n] is
     // the nth grid on the mth surface
-    ComplexMatrix Hamiltonian(dim);
-    // 1. V_{mm'}(R_n), n=n'
-    for (int n = 0; n < NGrids; n++)
-    {
-        const RealMatrix&& Vn = DiaPotential(GridCoordinate[n]);
-        for (int m = 0; m < NumPES; m++)
-        {
-            for (int mm = 0; mm < NumPES; mm++)
-            {
-                Hamiltonian(m * NGrids + n, mm * NGrids + n) += Vn(m, mm);
-            }
-        }
-    }
-    // 2. d2/dx2 (over all pes)
-    for (int m = 0; m < NumPES; m++)
-    {
-        for (int n = 0; n < NGrids; n++)
-        {
-            for (int nn = 0; nn < NGrids; nn++)
-            {
-                if (nn == n)
-                {
-                    Hamiltonian(m * NGrids + n, m * NGrids + nn) += pow(pi * hbar / dx, 2) / 6.0 / mass;
-                }
-                else
-                {
-                    Hamiltonian(m * NGrids + n, m * NGrids + nn) += pow_minus_one(nn - n) * pow(hbar / dx / (nn - n), 2) / mass;
-                }
-            }
-        }
-    }
-    // add absorbing potential
-    if (Absorbed == true)
-    {
-        for (int n = 0; n < NGrids; n++)
-        {
-            const double&& An = AbsorbPotential(mass, xmin, xmax, AbsorbingRegionLength, GridCoordinate[n]);
-            for (int m = 0; m < NumPES; m++)
-            {
-                Hamiltonian(m * NGrids + n, m * NGrids + n) -= 1.0i * An;
-            }
-        }
-    }
+    const ComplexMatrix Hamiltonian = Hamiltonian_construction(NGrids, GridCoordinate, dx, mass, Absorbed, xmin, xmax, AbsorbingRegionLength);
     clog << "Finish initialization. Begin evolving." << endl << show_time;
 
 
     // evolve; if H is hermitian, diagonal; otherwise, RK4
-    if (Absorbed != true)
+    if (Absorbed == false)
     {
         // diagonalize H
-        ComplexMatrix EigVec(Hamiltonian);
+        ComplexMatrix EigVec = Hamiltonian;
         double* EigVal = new double[dim];
         if (LAPACKE_zheev(LAPACK_ROW_MAJOR, 'V', 'U', dim, reinterpret_cast<MKL_Complex16*>(EigVec.data()), dim, EigVal) > 0)
         {
             cerr << "FAILING DIAGONALIZE DIABATIC HAMILTONIAN IN DYNAMICS" << endl;
-            exit(300);
+            exit(400);
         }
-        // H(diag)=EigVal=[EigVec]^T*H*[EigVec]
-        Complex* DiagH = new Complex[dim];
-        real_to_complex(EigVal, DiagH, dim);
-        // iHdt = -iH(diag)t, exp_iHdt = exp(-iH(diag)t)
-        Complex* iHdt = new Complex[dim];
-        Complex* exp_iHdt = new Complex[dim];
-        // psi_t=psi(t)=exp(-iHt)*psi(0)
-        Complex* psi_t = new Complex[dim];
-        // EigPropa is an intermediate, C*exp(-iH(diag)dt)
-        // original representation exp(-iHdt)=PropaEig*C^dagger
+        // memory allocation:
+        // psi(t)_adia=C2T*psi(t)_dia=C2T*C1*exp(-i*Hd*t)*C1T*psi(0)_dia
+        // so we need: psi(t)_adia, psi(t)_dia, C2, C1(=EigVal), exp(-i*Hd*t), exp(-i*Hd*t)*C1
+        // besides, we need to save the population on each PES
+        // psi_t: diabatic/adiabatic representation
+        Complex* psi_t_dia = new Complex[dim];
+        Complex* psi_t_adia = new Complex[dim];
+        // EigPropa is an intermediate, C1*exp(-i*Hd*t)
+        // original representation exp(-iHdt)=PropaEig*C1T
         Complex* PropaEig = new Complex[dim * dim];
+        // Propagator is exp(-iHdt)
+        ComplexMatrix Propagator(dim);
+        // TransformationMatrix makes dia to adia
+        const ComplexMatrix TransformationMatrix = DiaToAdia(NGrids, GridCoordinate);
+        // population on each PES
+        double Population[NumPES];
+        // evolution:
         for (int iStep = 0; iStep <= TotalStep; iStep += PsiOutputStep)
         {
+            const double Time = iStep * dt;
+            Steps << Time << endl;
+
             // calculate exp(-iH(diag)dt)
-            Complex propalpha(0, -iStep * dt); 
-            memset(iHdt, 0, dim * sizeof(Complex));
-            cblas_zaxpy(dim, &propalpha, DiagH, 1, iHdt, 1);
-            vmzExp(dim, reinterpret_cast<const MKL_Complex16*>(iHdt), reinterpret_cast<MKL_Complex16*>(exp_iHdt), mode);
-            // reconstruct the H matrix, and exp(-iHdt)=C*exp(-iH(diag)dt)*C^T
-            ComplexMatrix Propagator(dim);
+            // set all the matrix elements to be zero
+            memset(Propagator.data(), 0, dim * dim * sizeof(Complex));
+            // each diagonal element be exp(-iH*dt)
             for (int i = 0; i < dim; i++)
             {
-                Propagator(i, i) = exp_iHdt[i];
+                Propagator(i, i) = exp(Complex(0.0, -EigVal[i] * Time));
             }
+            // then transform back to the diabatic basis, exp(-iHt)=C1*exp(-i*Hd*t)*C1T
             cblas_zsymm(CblasRowMajor, CblasRight, CblasUpper, dim, dim, &Alpha, Propagator.data(), dim, EigVec.data(), dim, &Beta, PropaEig, dim);
             cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasConjTrans, dim, dim, dim, &Alpha, PropaEig, dim, EigVec.data(), dim, &Beta, Propagator.data(), dim);
-            // calculate psi_t=psi(t)=exp(-iHt)*psi(0)
-            cblas_zgemv(CblasRowMajor, CblasNoTrans, dim, dim, &Alpha, Propagator.data(), dim, Psi, 1, &Beta, psi_t, 1);
-            // print
-            PsiOutput << iStep * dt;
+            // calculate psi_t_dia=psi(t)_dia=exp(-iHt)_dia*psi(0)_dia
+            cblas_zgemv(CblasRowMajor, CblasNoTrans, dim, dim, &Alpha, Propagator.data(), dim, Psi0.get(), 1, &Beta, psi_t_dia, 1);
+            // calculate psi_t_adia=C2T*psi_t_dia
+            cblas_zgemv(CblasRowMajor, CblasConjTrans, dim, dim, &Alpha, TransformationMatrix.data(), dim, psi_t_dia, 1, &Beta, psi_t_adia, 1);
+
+            // print wavefunction
             for (int i = 0; i < dim; i++)
             {
-                PsiOutput << ' ' << psi_t[i].real() << ' ' << psi_t[i].imag();
+                PsiOutput << ' ' << (psi_t_adia[i] * conj(psi_t_adia[i]));
             }
             PsiOutput << endl;
-            // check if calculating phase space distribution
+
+            // print population
+            calculate_popultion(NGrids, psi_t_adia, Population);
+            cout << Time;
+            for (int i = 0; i < NumPES; i++)
+            {
+                cout << ' ' << Population[i];
+            }
+            cout << endl;
+            
+            /*/ check if calculating phase space distribution
             if (iStep % PhaseOutputStep == 0)
             {
                 // print on the screen for monitoring
-                clog << "t = " << dt * iStep << endl;
-                PhaseOutput << iStep * dt;
+                clog << "t = " << Time << endl;
+                PhaseOutput << Time;
                 // Wigner Transformation: P(x,p)=int{dy*exp(2ipy/hbar)<x-y|rho|x+y>}/(pi*hbar)
                 // the interval of p is pi*hbar/dx*[-1,1), dp=2*pi*hbar/(xmax-xmin)
                 // loop over p first
                 for (int i = 0; i < NGrids; i++)
                 {
-                    const double p = (i - NGrids / 2) * 2 * pi * hbar / (xmax - xmin + (Absorbed == true ? 2 * AbsorbingRegionLength : 0));
+                    const double p = (i - NGrids / 2) * 2 * pi * hbar / TotalLength;
                     // loop over x
                     for (int j = 0; j < NGrids; j++)
                     {
@@ -287,34 +212,24 @@ int main(void)
                         Complex integral;
                         for (int k = max(-j, j + 1 - NGrids); k <= min(j, NGrids - 1 - j); k++)
                         {
-                            integral += exp(2.0i * p * GridCoordinate[k] / hbar) * conj(Psi[j + k]) * Psi[j - k];
+                            integral += exp(2.0i * p * GridCoordinate[k] / hbar) * conj(Psi0[j + k]) * Psi0[j - k];
                         }
                         PhaseOutput << ' ' << integral.real() / pi / hbar;
                     }
                 }
                 PhaseOutput << endl;
-            }
+            }// */
         }
+        Steps.close();
         // after evolution, calculating the population
-        cout << p0;
-        for (int i = 0; i < NumPES; i++)
-        {
-            Complex InnerProd;
-            cblas_zdotc_sub(NGrids, psi_t + i * NGrids, 1, psi_t + i * NGrids, 1, &InnerProd);
-            cout << ' ' << InnerProd.real();
-        }
-        cout << endl;
         clog << "Finish evolution." << endl << show_time << endl;
         delete[] PropaEig;
-        delete[] psi_t;
-        delete[] exp_iHdt;
-        delete[] iHdt;
-        delete[] DiagH;
+        delete[] psi_t_adia;
+        delete[] psi_t_dia;
         delete[] EigVal;
     }
 
     // end. free the memory, close the files.
-    delete[] Psi;
     delete[] GridCoordinate;
     PhaseOutput.close();
     PsiOutput.close();

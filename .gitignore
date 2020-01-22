@@ -6,3 +6,5 @@ output
 input
 dvr
 .vscode/
+*.gif
+*.png
