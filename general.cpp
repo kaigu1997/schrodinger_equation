@@ -69,26 +69,6 @@ bool read_absorb(istream& is)
     return Absorbed;
 }
 
-
-// read the time values (dt, OutputTime) and
-// based on having the absorbing potential or not
-// to return the value that are really used
-TimeParameter read_time(istream& is, const double mass, const double p0max, const bool Absorbed)
-{
-    // read dt. criteria is from J. Comput. Phys., 1983, 52(1): 35-53.
-    double dt = cutoff(min(read_double(is), 0.2 * 2.0 * mass * hbar / pow(p0max, 2)));
-    // total evolving time and output time, in unit of a.u.
-    double TotalTime = read_double(is);
-    double PsiOutputTime = read_double(is);
-    double PhaseOutputTime = read_double(is); 
-    // if absorbed potential is not used, then H is diagonalizable, and dt are not needed
-    if (Absorbed == false)
-    {
-        dt = PsiOutputTime;
-    }
-    return make_tuple(dt, TotalTime, PsiOutputTime, PhaseOutputTime);
-}
-
 // to print current time
 ostream& show_time(ostream& os)
 {
@@ -174,13 +154,13 @@ ComplexMatrix Hamiltonian_construction(const int NGrids, const double* GridCoord
 }
 
 // calculate the population on each PES
-void calculate_popultion(const int NGrids, const Complex* AdiabaticPsi, double* Population)
+void calculate_popultion(const int NGrids, const double dx, const Complex* AdiabaticPsi, double* Population)
 {
     static Complex InnerProduct;
     // calculate the inner product of each PES
     for (int i = 0; i < NumPES; i++)
     {
         cblas_zdotc_sub(NGrids, AdiabaticPsi + i * NGrids, 1, AdiabaticPsi + i * NGrids, 1, &InnerProduct);
-        Population[i] = InnerProduct.real();
+        Population[i] = InnerProduct.real() * dx;
     }
 }

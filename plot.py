@@ -15,10 +15,10 @@ def read_input():
     return x, t
 
 # plot preparation
-fig = plt.figure()
-ax = fig.add_subplot(111, xlim=(-20, 20), ylim=(0, 1))
-ax.grid()
 x, t = read_input()
+fig = plt.figure()
+ax = fig.add_subplot(111, xlim=(x[0], x[len(x)-1]), ylim=(0, 1))
+ax.grid()
 plt.xlabel('x')
 plt.ylabel('Population')
 
@@ -55,7 +55,7 @@ def ani(i):
     return lines, time_text
 
 # make the animation
-ani = animation.FuncAnimation(fig, ani, len(t), init, repeat=False, blit=False)
+ani = animation.FuncAnimation(fig, ani, len(t), init, interval=1000//(t[1]-t[0]), repeat=False, blit=False)
 # show
 ani.save('psi.gif','imagemagick')
 # plt.show()

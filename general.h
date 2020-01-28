@@ -13,9 +13,14 @@
 #include <tuple>
 #include "matrix.h"
 
-// mathematical, physical and computational constants
+// mathematical and physical constants
 const double pi = acos(-1.0), hbar = 1.0, PlanckH = 2 * pi * hbar;
+// Alpha and Beta are for cblas complex matrix multiplication functions
+// as they behave as A=alpha*B*C+beta*A
 const Complex Alpha(1.0, 0.0), Beta(0.0, 0.0);
+// AbsorbLim means if the absorbed population is over this
+// then the program should stop. Used only when Absorb is on
+const double AbsorbLim = 1.0e-2;
 
 // two kinds of unique_ptr array, no need to free manually
 typedef unique_ptr<double[]> doubleVector;
@@ -47,13 +52,6 @@ double read_double(istream& is);
 // check if absorbing potential is used or not
 bool read_absorb(istream& is);
 
-// TimeParameter is used to save the constant time parameters (dt, evolving time, output time)
-typedef tuple<double, double, double, double> TimeParameter;
-// read the time values (dt, OutputTime) and
-// based on having the absorbing potential or not
-// to return the value that are really used
-TimeParameter read_time(istream& is, const double mass, const double p0max, const bool Absorbed);
-
 // to print current time
 ostream& show_time(ostream& os);
 
@@ -67,6 +65,6 @@ ComplexVector wavefunction_initialization(const int NGrids, const double* GridCo
 ComplexMatrix Hamiltonian_construction(const int NGrids, const double* GridCoordinate, const double dx, const double mass, const bool Absorbed, const double xmin, const double xmax, const double AbsorbingRegionLength);
 
 // calculate the population on each PES
-void calculate_popultion(const int NGrids, const Complex* AdiabaticPsi, double* Population);
+void calculate_popultion(const int NGrids, const double dx, const Complex* AdiabaticPsi, double* Population);
 
 #endif // !GENERAL_H
