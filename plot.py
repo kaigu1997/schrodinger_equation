@@ -16,6 +16,7 @@ def read_input():
 
 # plot preparation
 x, t = read_input()
+dx = (x[len(x)-1] - x[0]) / (len(x) - 1)
 fig = plt.figure()
 ax = fig.add_subplot(111, xlim=(x[0], x[len(x)-1]), ylim=(0, 1))
 ax.grid()
@@ -55,7 +56,28 @@ def ani(i):
     return lines, time_text
 
 # make the animation
-ani = animation.FuncAnimation(fig, ani, len(t), init, interval=1000//(t[1]-t[0]), repeat=False, blit=False)
+ani = animation.FuncAnimation(fig, ani, len(t), init, interval=10000//(t[1]-t[0]), repeat=False, blit=False)
 # show
 ani.save('psi.gif','imagemagick')
 # plt.show()
+
+
+# plot population evolution
+def calc_pop():
+    psifile = open('psi.txt', 'r')
+    ppl = [[],[]]
+    for line in psifile:
+        psi = np.array(line.split(), dtype=float)
+        ppl[0].append(sum(psi[0:len(x)])*dx)
+        ppl[1].append(sum(psi[len(x):len(x)*2])*dx)
+    psifile.close()
+    return ppl
+
+plt.clf()
+ppl = calc_pop()
+plt.plot(t, ppl[0], color='r', label='Population[0]')
+plt.plot(t, ppl[1], color='b', label='Population[1]')
+plt.legend(loc = 'best')
+plt.xlim((t[0],t[len(t)-1]))
+plt.ylim((0,1))
+plt.savefig('psi.png')

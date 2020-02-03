@@ -1,29 +1,29 @@
 #!/bin/bash
 make
 make clean
-for (( i=1;i<=350;i=i+1 ))
+mass=2000.0
+for (( i=-40;i<=10;i=i+1 ))
 do
-    p=$(echo "scale=1;$i/10.0"|bc)
-    sigmap=$(echo "scale=3;$p/20.0"|bc)
+#    p=$(echo "scale=1;$i/10.0"|bc)
+    p=$(echo "sqrt(2.0*${mass}*e(${i}/10.0))"|bc -l)
+    sigmap=$(echo "scale=scale(${p});${p}/20.0"|bc)
     cat > input << END_FILE
 mass:
-2000.0
+${mass}
 x0:
 -10.0
 p0:
-$p
+${p}
 sigma p:
-$sigmap
+${sigmap}
 Left boundary:
 -20.0
 Right boundary:
-20.0
+60.0
 Upper limit of dx:
 1.0
 Absorb potential: (on, off)
 off
-Upper limit of dt:
-0.1
 Total time of evolution:
 100000.0
 Output period:
@@ -32,6 +32,13 @@ Phase space output period:
 5000.0
 END_FILE
     ./dvr >> output 2>>log
-    echo "Finished 10.0 * p = $i.0"
+    python plot.py
+    for f in psi.*
+    do
+        mv -- "$f" "result/${i}.${f#psi.}"
+    done
+    echo "Finished 10.0 * lnE = $i.0"
+    echo $(date +"%Y-%m-%d %H:%M:%S.%N")
 done
-
+rm t.txt x.txt
+mv output log result

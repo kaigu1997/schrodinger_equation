@@ -1,10 +1,10 @@
 *.o
 *.txt
 *.png
+*.gif
 log
 output
 input
 dvr
 .vscode/
-*.gif
-*.png
+result/

@@ -36,7 +36,8 @@ int main(void)
     // the order is t, psi(t)[0].real, psi(t)[0].imag, psi(t)[1].real, ...
     // In Phase space, each line is the PS-distribution at a moment:
     // t, P(x0,p0,t), P(x1,p0,t), ... P(x0,p1,t)...
-    ofstream PsiOutput("psi.txt"), PhaseOutput("phase.txt");
+    ofstream PsiOutput("psi.txt");
+    // ofstream PhaseOutput("phase.txt");
     // Grids contains each grid coordinate, one in a line
     // Steps contains when is each step, also one in a line
     ofstream Grids("x.txt"), Steps("t.txt");
@@ -125,7 +126,7 @@ int main(void)
     // c is the coefficient, c[m*NGrids+n] is
     // the nth grid on the mth surface
     const ComplexMatrix Hamiltonian = Hamiltonian_construction(NGrids, GridCoordinate, dx, mass, Absorbed, xmin, xmax, AbsorbingRegionLength);
-    clog << "Finish initialization. Begin evolving." << endl << show_time;
+    clog << "Finish initialization. Begin evolving." << endl << show_time << endl;
 
 
     // evolve; if H is hermitian, diagonal; otherwise, Schur decomposition
@@ -154,8 +155,11 @@ int main(void)
         ComplexMatrix Propagator(dim);
         // TransformationMatrix makes dia to adia
         const ComplexMatrix TransformationMatrix = DiaToAdia(NGrids, GridCoordinate);
-        // population on each PES
-        double Population[NumPES];
+        // population on each PES, and the population on each PES at last output moment
+        double Population[NumPES] = {1.0}, OldPopulation[NumPES] = {0};
+        // before calculating population, check if wavepacket have passed through center(=0.0)
+        bool PassedCenter = false;
+        clog << "Finish diagonalization and memory allocation." << endl << show_time << endl;
         // evolution:
         for (int iStep = 0; iStep <= TotalStep; iStep += PsiOutputStep)
         {
@@ -184,15 +188,6 @@ int main(void)
                 PsiOutput << ' ' << (psi_t_adia[i] * conj(psi_t_adia[i])).real();
             }
             PsiOutput << endl;
-
-            // print population on each PES
-            calculate_popultion(NGrids, dx, psi_t_adia, Population);
-            cout << Time;
-            for (int i = 0; i < NumPES; i++)
-            {
-                cout << ' ' << Population[i];
-            }
-            cout << endl;
             
             /*/ check if calculating phase space distribution
             if (iStep % PhaseOutputStep == 0)
@@ -220,6 +215,56 @@ int main(void)
                 }
                 PhaseOutput << endl;
             }// */
+
+            // print population on each PES
+            // and check if evolution should stop
+            int NotChangedPES = 0;
+            calculate_popultion(NGrids, dx, psi_t_adia, Population);
+            // check if all PES are stable
+            // first, check if the ground state wavepacket have been through origin
+            if (PassedCenter == false)
+            {
+                // caculate the new center
+                double xBar = 0;
+                for (int i = 0; i < NGrids; i++)
+                {
+                    xBar += GridCoordinate[i] * (psi_t_adia[i] * conj(psi_t_adia[i])).real();
+                }
+                // then check if it passed the center
+                if (xBar < 0)
+                {
+                    continue;
+                }
+                else
+                {
+                    PassedCenter = true;
+                }
+            }
+            // after calculating new <x>, judge and check
+            if (PassedCenter == true)
+            {
+                for (int i = 0; i < NumPES; i++)
+                {
+                    if (abs(Population[i] - OldPopulation[i]) < ChangeLim)
+                    {
+                        NotChangedPES++;
+                    }
+                }
+                if (NotChangedPES == NumPES)
+                {
+                    cerr << "POPULATION ON EACH PES IS STABLE. STOP EVOLVING AT " << Time << endl;
+                    // print the final info
+                    cout << log(p0 * p0 / 2.0 / mass);
+                    for (int i = 0; i < NumPES; i++)
+                    {
+                        cout << ' ' << Population[i];
+                    }
+                    cout << endl;
+                    break;
+                }
+            }
+            // after checking, copy the population
+            copy(Population, Population + NumPES, OldPopulation);
         }
         // after evolution, print time and frees the resources
         clog << "Finish evolution." << endl << show_time << endl;
@@ -357,7 +402,7 @@ int main(void)
             }
         }
         // after evolution, print time and frees the resources
-        clog << "Finish evolution." << endl << show_time << endl;
+        clog << "Finish evolution." << endl << show_time << endl << endl << endl;
         delete[] PropaEig;
         delete[] psi_t_adia;
         delete[] psi_t_dia;
@@ -369,7 +414,7 @@ int main(void)
     // end. free the memory, close the files.
     delete[] GridCoordinate;
     Steps.close();
-    PhaseOutput.close();
+    // PhaseOutput.close();
     PsiOutput.close();
 	return 0;
 }

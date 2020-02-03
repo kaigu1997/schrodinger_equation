@@ -22,7 +22,7 @@ clean:
 
 .PHONY: clean_result
 clean_result:
-	-rm log output *.txt *.gif
+	-rm log output *.txt *.png *.gif
 
 .PHONY: git
 git:

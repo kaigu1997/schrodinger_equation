@@ -21,6 +21,9 @@ const Complex Alpha(1.0, 0.0), Beta(0.0, 0.0);
 // AbsorbLim means if the absorbed population is over this
 // then the program should stop. Used only when Absorb is on
 const double AbsorbLim = 1.0e-2;
+// ChangeLim is that, if the population change on each PES is smaller 
+// than ChangeLim, then it is stable and could stop simulation
+const double ChangeLim = 1e-5;
 
 // two kinds of unique_ptr array, no need to free manually
 typedef unique_ptr<double[]> doubleVector;

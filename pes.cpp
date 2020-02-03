@@ -6,7 +6,7 @@
 #include "matrix.h"
 #include "pes.h"
 
-//*Model 1
+/*Model 1
 // constants in the diabatic Potential
 static const double A = 0.01, B = 1.6, C = 0.005, D = 1.0;
 // subsystem diabatic Potential, the force, and hessian
@@ -37,7 +37,7 @@ static RealMatrix DiaHesse(const double x)
     return Hesse;
 }// */
 
-/*Model 2
+//*Model 2
 // constants in the diabatic Potential
 static const double A = 0.10, B = 0.28, C = 0.015, D = 0.06, E = 0.05;
 // subsystem diabatic Potential, the force, and hessian
