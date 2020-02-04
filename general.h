@@ -67,6 +67,9 @@ ComplexVector wavefunction_initialization(const int NGrids, const double* GridCo
 // construct the Hamiltonian
 ComplexMatrix Hamiltonian_construction(const int NGrids, const double* GridCoordinate, const double dx, const double mass, const bool Absorbed, const double xmin, const double xmax, const double AbsorbingRegionLength);
 
+// calculate the initial energy-basis wavefunction
+ComplexVector transformed_wavefunction(const int NGrids, const ComplexMatrix& TransformationMatrix, const ComplexVector& psi_0_dia);
+
 // calculate the population on each PES
 void calculate_popultion(const int NGrids, const double dx, const Complex* AdiabaticPsi, double* Population);
 

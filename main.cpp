@@ -143,16 +143,14 @@ int main(void)
         }
         // memory allocation:
         // psi(t)_adia=C2T*psi(t)_dia=C2T*C1*exp(-i*Hd*t)*C1T*psi(0)_dia
-        // so we need: psi(t)_adia, psi(t)_dia, C2, C1(=EigVal), exp(-i*Hd*t), exp(-i*Hd*t)*C1
+        // so we need: C2, C1(=EigVal), psi(t)_adia, psi(t)_dia, psi(t)_diag, psi(0)_diag
         // besides, we need to save the population on each PES
-        // psi_t: diabatic/adiabatic representation
+        // psi_t: diabatic/adiabatic/diagonal representation
         Complex* psi_t_dia = new Complex[dim];
         Complex* psi_t_adia = new Complex[dim];
-        // EigPropa is an intermediate, C1*exp(-i*Hd*t)
-        // original representation exp(-iHdt)=PropaEig*C1T
-        Complex* PropaEig = new Complex[dim * dim];
-        // Propagator is exp(-iHdt)
-        ComplexMatrix Propagator(dim);
+        Complex* psi_t_diag = new Complex[dim];
+        // psi_0: diagonal representation, which is time-independent, =C1T*psi(0)_dia; 
+        const ComplexVector psi_0_diag = transformed_wavefunction(NGrids, EigVec, Psi0);
         // TransformationMatrix makes dia to adia
         const ComplexMatrix TransformationMatrix = DiaToAdia(NGrids, GridCoordinate);
         // population on each PES, and the population on each PES at last output moment
@@ -166,19 +164,14 @@ int main(void)
             const double Time = iStep * dt;
             Steps << Time << endl;
 
-            // calculate exp(-iH(diag)dt)
-            // set all the matrix elements to be zero
-            memset(Propagator.data(), 0, dim * dim * sizeof(Complex));
-            // each diagonal element be exp(-iH*dt)
+            // calculate psi_t_diag = exp(-iH(diag)*t) * psi_0_diag,
+            // each diagonal element be the eigenvalue
             for (int i = 0; i < dim; i++)
             {
-                Propagator(i, i) = exp(Complex(0.0, -EigVal[i] * Time));
+                psi_t_diag[i] = exp(Complex(0.0, -EigVal[i] * Time)) * psi_0_diag[i];
             }
-            // then transform back to the diabatic basis, exp(-iHt)=C1*exp(-i*Hd*t)*C1T
-            cblas_zsymm(CblasRowMajor, CblasRight, CblasUpper, dim, dim, &Alpha, Propagator.data(), dim, EigVec.data(), dim, &Beta, PropaEig, dim);
-            cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasConjTrans, dim, dim, dim, &Alpha, PropaEig, dim, EigVec.data(), dim, &Beta, Propagator.data(), dim);
-            // calculate psi_t_dia=psi(t)_dia=exp(-iHt)_dia*psi(0)_dia
-            cblas_zgemv(CblasRowMajor, CblasNoTrans, dim, dim, &Alpha, Propagator.data(), dim, Psi0.get(), 1, &Beta, psi_t_dia, 1);
+            // calculate psi_t_dia=C1*psi_t_diag
+            cblas_zgemv(CblasRowMajor, CblasNoTrans, dim, dim, &Alpha, EigVec.data(), dim, psi_t_diag, 1, &Beta, psi_t_dia, 1);
             // calculate psi_t_adia=C2T*psi_t_dia
             cblas_zgemv(CblasRowMajor, CblasConjTrans, dim, dim, &Alpha, TransformationMatrix.data(), dim, psi_t_dia, 1, &Beta, psi_t_adia, 1);
 
@@ -268,9 +261,9 @@ int main(void)
         }
         // after evolution, print time and frees the resources
         clog << "Finish evolution." << endl << show_time << endl;
-        delete[] PropaEig;
         delete[] psi_t_adia;
         delete[] psi_t_dia;
+        delete[] psi_t_diag;
         delete[] EigVal;
     }
     else

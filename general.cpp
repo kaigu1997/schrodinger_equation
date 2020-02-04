@@ -153,6 +153,19 @@ ComplexMatrix Hamiltonian_construction(const int NGrids, const double* GridCoord
     return Hamiltonian;
 }
 
+// calculate the initial energy-basis wavefunction
+ComplexVector transformed_wavefunction(const int NGrids, const ComplexMatrix& TransformationMatrix, const ComplexVector& psi_0_dia)
+{
+    // dim is the number of elements in psi
+    const int dim = NGrids * NumPES;
+    // psi_0_diag is to contain the result
+    Complex* psi_0_diag = new Complex[dim];
+    // do the calculation
+    cblas_zgemv(CblasRowMajor, CblasConjTrans, dim, dim, &Alpha, TransformationMatrix.data(), dim, psi_0_dia.get(), 1, &Beta, psi_0_diag, 1);
+    // return the result
+    return ComplexVector(psi_0_diag);
+}
+
 // calculate the population on each PES
 void calculate_popultion(const int NGrids, const double dx, const Complex* AdiabaticPsi, double* Population)
 {
