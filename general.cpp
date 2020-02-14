@@ -45,30 +45,6 @@ double read_double(istream& is)
     return temp;
 }
 
-// check if absorbing potential is used or not
-bool read_absorb(istream& is)
-{
-    string buffer, WhetherAbsorb;
-    bool Absorbed;
-    getline(is, buffer);
-    is >> WhetherAbsorb;
-    getline(is, buffer);
-    if (strcmp(WhetherAbsorb.c_str(), "on") == 0)
-    {
-        Absorbed = true;
-    }
-    else if (strcmp(WhetherAbsorb.c_str(), "off") == 0)
-    {
-        Absorbed = false;
-    }
-    else
-    {
-        cerr << "UNKNOWN CASE OF ABSORBING POTENTIAL" << endl;
-        exit(301);
-    }
-    return Absorbed;
-}
-
 // to print current time
 ostream& show_time(ostream& os)
 {
@@ -80,32 +56,8 @@ ostream& show_time(ostream& os)
 
 // evolution related function
 
-// initialize the gaussian wavepacket, and normalize it
-ComplexVector wavefunction_initialization(const int NGrids, const double* GridCoordinate, const double dx, const double x0, const double p0, const double SigmaX)
-{
-    // generate the array to save the initial wavepacket
-    Complex* Psi0 = new Complex[NGrids * NumPES];
-    // for higher PES, the initial wavefunction is zero
-    memset(Psi0 + NGrids, 0, NGrids * (NumPES - 1) * sizeof(Complex));
-    // for ground state, it is a gaussian. psi(x)=A*exp(-(x-x0)^2/4sigmax^2+ip0x/hbar)
-    for (int i = 0; i < NGrids; i++)
-    {
-        Psi0[i] = exp(Complex(-pow((GridCoordinate[i] - x0) / 2 / SigmaX, 2), p0 * GridCoordinate[i] / hbar));
-    }
-    // normalization
-    Complex PsiSquare;
-    cblas_zdotc_sub(NGrids, Psi0, 1, Psi0, 1, &PsiSquare);
-    double NormFactor = sqrt(PsiSquare.real() * dx);
-    for (int i = 0; i < NGrids; i++)
-    {
-        Psi0[i] /= NormFactor;
-    }
-    // give it to a unique_ptr
-    return ComplexVector(Psi0);
-}
-
 // construct the Hamiltonian
-ComplexMatrix Hamiltonian_construction(const int NGrids, const double* GridCoordinate, const double dx, const double mass, const bool Absorbed, const double xmin, const double xmax, const double AbsorbingRegionLength)
+ComplexMatrix Hamiltonian_construction(const int NGrids, const double* GridCoordinate, const double dx, const double mass)
 {
     ComplexMatrix Hamiltonian(NGrids * NumPES);
     // 1. V_{mm'}(R_n), n=n'
@@ -138,38 +90,53 @@ ComplexMatrix Hamiltonian_construction(const int NGrids, const double* GridCoord
             }
         }
     }
-    // add absorbing potential
-    if (Absorbed == true)
-    {
-        for (int n = 0; n < NGrids; n++)
-        {
-            const double&& An = AbsorbPotential(mass, xmin, xmax, AbsorbingRegionLength, GridCoordinate[n]);
-            for (int m = 0; m < NumPES; m++)
-            {
-                Hamiltonian(m * NGrids + n, m * NGrids + n) -= 1.0i * An;
-            }
-        }
-    }
     return Hamiltonian;
 }
 
-// calculate the initial energy-basis wavefunction
-ComplexVector transformed_wavefunction(const int NGrids, const ComplexMatrix& TransformationMatrix, const ComplexVector& psi_0_dia)
+// initialize the gaussian wavepacket, and normalize it
+void diabatic_wavefunction_initialization(const int NGrids, const double* GridCoordinate, const double dx, const double x0, const double p0, const double SigmaX, Complex* psi)
 {
-    // dim is the number of elements in psi
-    const int dim = NGrids * NumPES;
-    // psi_0_diag is to contain the result
-    Complex* psi_0_diag = new Complex[dim];
-    // do the calculation
-    cblas_zgemv(CblasRowMajor, CblasConjTrans, dim, dim, &Alpha, TransformationMatrix.data(), dim, psi_0_dia.get(), 1, &Beta, psi_0_diag, 1);
-    // return the result
-    return ComplexVector(psi_0_diag);
+    // for higher PES, the initial wavefunction is zero
+    memset(psi + NGrids, 0, NGrids * (NumPES - 1) * sizeof(Complex));
+    // for ground state, it is a gaussian. psi(x)=A*exp(-(x-x0)^2/4sigmax^2+ip0x/hbar)
+    for (int i = 0; i < NGrids; i++)
+    {
+        psi[i] = exp(Complex(-pow((GridCoordinate[i] - x0) / 2 / SigmaX, 2), p0 * GridCoordinate[i] / hbar));
+    }
+    // normalization
+    Complex PsiSquare;
+    cblas_zdotc_sub(NGrids, psi, 1, psi, 1, &PsiSquare);
+    double NormFactor = sqrt(PsiSquare.real() * dx);
+    for (int i = 0; i < NGrids; i++)
+    {
+        psi[i] /= NormFactor;
+    }
+}
+
+// cutoff the out-of-boundary populations
+void absorb(const int NGrids, const int LeftIndex, const int RightIndex, const double dx, Complex* psi, double* AbsorbedPopulation)
+{
+    for (int i = 0; i < NumPES; i++)
+    {
+        // absorb the left
+        for (int j = 0; j < LeftIndex; j++)
+        {
+            AbsorbedPopulation[i] += (psi[j] * conj(psi[j])).real() * dx;
+            psi[j] = 0;
+        }
+        // absorb the right
+        for (int j = RightIndex + 1; j < NGrids; j++)
+        {
+            AbsorbedPopulation[i + NumPES] += (psi[j] * conj(psi[j])).real() * dx;
+            psi[j] = 0;
+        }
+    }
 }
 
 // calculate the population on each PES
 void calculate_popultion(const int NGrids, const double dx, const Complex* AdiabaticPsi, double* Population)
 {
-    static Complex InnerProduct;
+    Complex InnerProduct;
     // calculate the inner product of each PES
     for (int i = 0; i < NumPES; i++)
     {

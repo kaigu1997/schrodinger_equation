@@ -1,6 +1,10 @@
 #!/bin/bash
 make
 make clean
+folder=result
+if [ ! -d ${folder} ]; then
+    mkdir ${folder}
+fi
 mass=2000.0
 for (( i=-40;i<=10;i=i+1 ))
 do
@@ -16,14 +20,18 @@ p0:
 ${p}
 sigma p:
 ${sigmap}
-Left boundary:
+Left box boundary:
 -20.0
-Right boundary:
-60.0
+Right box boundary:
+20.0
+Left interaction region boundary:
+-10.0
+Right interaction region boundary:
+10.0
 Upper limit of dx:
 1.0
-Absorb potential: (on, off)
-off
+Upper limit of dt:
+1.0
 Total time of evolution:
 100000.0
 Output period:
@@ -35,7 +43,7 @@ END_FILE
     python plot.py
     for f in psi.*
     do
-        mv -- "$f" "result/${i}.${f#psi.}"
+        mv -- "$f" "${folder}/${i}.${f#psi.}"
     done
     echo "Finished 10.0 * lnE = $i.0"
     echo $(date +"%Y-%m-%d %H:%M:%S.%N")

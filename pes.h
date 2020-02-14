@@ -22,12 +22,9 @@ using namespace std;
 const int NumPES = 2;
 // diabatic PES matrix: analytical
 RealMatrix DiaPotential(const double x);
-// the absorbing potential: V->V-iE
-// Here is E only. E is diagonal
-double AbsorbPotential(const double mass, const double xmin, const double xmax, const double AbsorbingRegionLength, const double x);
 
 // transformation matrix from diabatic state to adiabatic state
-// i.e. M*psi(dia)=psi(adia), which diagonalize PES only (instead of diagonal H)
+// i.e. C^T*psi(dia)=psi(adia), which diagonalize PES only (instead of diagonal H)
 ComplexMatrix DiaToAdia(const int NGrids, const double* GridCoordinate);
 
 #endif // !PES_H
