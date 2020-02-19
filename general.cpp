@@ -45,6 +45,30 @@ double read_double(istream& is)
     return temp;
 }
 
+// check if absorbing potential is used or not
+bool read_absorb(istream& is)
+{
+    string buffer, WhetherAbsorb;
+    bool Absorbed;
+    getline(is, buffer);
+    is >> WhetherAbsorb;
+    getline(is, buffer);
+    if (strcmp(WhetherAbsorb.c_str(), "on") == 0)
+    {
+        Absorbed = true;
+    }
+    else if (strcmp(WhetherAbsorb.c_str(), "off") == 0)
+    {
+        Absorbed = false;
+    }
+    else
+    {
+        cerr << "UNKNOWN CASE OF ABSORBING POTENTIAL" << endl;
+        exit(301);
+    }
+    return Absorbed;
+}
+
 // to print current time
 ostream& show_time(ostream& os)
 {
@@ -57,7 +81,7 @@ ostream& show_time(ostream& os)
 // evolution related function
 
 // construct the Hamiltonian
-ComplexMatrix Hamiltonian_construction(const int NGrids, const double* GridCoordinate, const double dx, const double mass)
+ComplexMatrix Hamiltonian_construction(const int NGrids, const double* GridCoordinate, const double dx, const double mass, const bool Absorbed, const double xmin, const double xmax, const double AbsorbingRegionLength)
 {
     ComplexMatrix Hamiltonian(NGrids * NumPES);
     // 1. V_{mm'}(R_n), n=n'
@@ -90,11 +114,23 @@ ComplexMatrix Hamiltonian_construction(const int NGrids, const double* GridCoord
             }
         }
     }
+    // add absorbing potential
+    if (Absorbed == true)
+    {
+        for (int n = 0; n < NGrids; n++)
+        {
+            const double&& An = AbsorbPotential(mass, xmin, xmax, AbsorbingRegionLength, GridCoordinate[n]);
+            for (int m = 0; m < NumPES; m++)
+            {
+                Hamiltonian(m * NGrids + n, m * NGrids + n) -= 1.0i * An;
+            }
+        }
+    }
     return Hamiltonian;
 }
 
 // initialize the gaussian wavepacket, and normalize it
-void diabatic_wavefunction_initialization(const int NGrids, const double* GridCoordinate, const double dx, const double x0, const double p0, const double SigmaX, Complex* psi)
+void wavefunction_initialization(const int NGrids, const double* GridCoordinate, const double dx, const double x0, const double p0, const double SigmaX, Complex* psi)
 {
     // for higher PES, the initial wavefunction is zero
     memset(psi + NGrids, 0, NGrids * (NumPES - 1) * sizeof(Complex));
@@ -113,24 +149,38 @@ void diabatic_wavefunction_initialization(const int NGrids, const double* GridCo
     }
 }
 
-// cutoff the out-of-boundary populations
-void absorb(const int NGrids, const int LeftIndex, const int RightIndex, const double dx, Complex* psi, double* AbsorbedPopulation)
+// calculate the phase space distribution, and output it
+void output_phase_space_distribution(ostream& out, const int NGrids, const double* GridCoordinate, const double dx, const Complex* psi)
 {
-    for (int i = 0; i < NumPES; i++)
+    const double TotalLength = GridCoordinate[NGrids - 1] - GridCoordinate[0];
+    // Wigner Transformation: P(x,p)=int{dy*exp(2ipy/hbar)<x-y|rho|x+y>}/(pi*hbar)
+    // the interval of p is pi*hbar/dx*[-1,1), dp=2*pi*hbar/(xmax-xmin)
+    // loop over pes first
+    for (int iPES = 0; iPES < NumPES; iPES++)
     {
-        // absorb the left
-        for (int j = 0; j < LeftIndex; j++)
+        for (int jPES = 0; jPES < NumPES; jPES++)
         {
-            AbsorbedPopulation[i] += (psi[j] * conj(psi[j])).real() * dx;
-            psi[j] = 0;
-        }
-        // absorb the right
-        for (int j = RightIndex + 1; j < NGrids; j++)
-        {
-            AbsorbedPopulation[i + NumPES] += (psi[j] * conj(psi[j])).real() * dx;
-            psi[j] = 0;
+            // loop over x
+            for (int xi = 0; xi < NGrids; xi++)
+            {
+                // loop over p
+                for (int pj = 0; pj < NGrids; pj++)
+                {
+                    const double p = (pj - NGrids / 2) * 2 * pi * hbar / TotalLength;
+                    // do the numerical integral
+                    Complex integral(0.0, 0.0);
+                    // 0 <= (x+y, x-y) < NGrids 
+                    for (int yk = max(-xi, xi + 1 - NGrids); yk <= min(xi, NGrids - 1 - xi); yk++)
+                    {
+                        const double y = GridCoordinate[0] + yk * dx;
+                        integral += exp(Complex(0.0, 2.0 * p * y / hbar)) * conj(psi[xi + yk + jPES * NGrids]) * psi[xi - yk + iPES * NGrids];
+                    }
+                    out << integral.real() * dx / pi / hbar;
+                }
+            }
         }
     }
+    out << endl;
 }
 
 // calculate the population on each PES

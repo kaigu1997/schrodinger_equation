@@ -92,8 +92,32 @@ static RealMatrix DiaHesse(const double x)
     return Hesse;
 }// */
 
+// the absorbing potential: V->V-iE
+// Here is E only. E is diagonal
+// E is zero in the interacting region
+// E=hbar^2/2m*(2*pi/arl)^2*y(x)
+// x=2*d*kmin*(r-r1)=c(r-r1)/arl
+// d=c/4pi -> arl=2pi/kmin=h/pmin
+// y(x)=sqrt(pow(cn(x/sqrt(2),1/sqrt(2)),-4)-1)
+// ~4/(c-x)^2+4/(c+x)^2-8/c^2 from
+// J. Chem. Phys., 2004, 120(5): 2247-2254,
+// c=sqrt(2)*K(1/sqrt(2))
+double AbsorbPotential(const double mass, const double xmin, const double xmax, const double AbsorbingRegionLength, const double r)
+{
+    static const double c = sqrt(2) * comp_ellint_1(1.0 / sqrt(2));
+    // in the interacting region, no AP
+    if (r > xmin && r < xmax)
+    {
+        return 0;
+    }
+    // otherwise, return E(x)_ii
+    double x = c * (r < xmin ? r - xmin : r - xmax) / AbsorbingRegionLength;
+    return pow(PlanckH / AbsorbingRegionLength, 2) * 2.0 / mass
+        * (1.0 / pow(c - x, 2) + 1.0 / pow(c + x, 2) - 2.0 / pow(c, 2));
+}
+
 // transformation matrix from diabatic state to adiabatic state
-// i.e. C^T*psi(dia)=psi(adia), which diagonalize PES only (instead of diagonal H)
+// i.e. M*psi(dia)=psi(adia), which diagonalize PES only (instead of diagonal H)
 ComplexMatrix DiaToAdia(const int NGrids, const double* GridCoordinate)
 {
     ComplexMatrix TransformationMatrix(NGrids * NumPES);

@@ -1,7 +1,7 @@
 #!/bin/bash
 make
 make clean
-folder=result
+folder = "result"
 if [ ! -d ${folder} ]; then
     mkdir ${folder}
 fi
@@ -20,24 +20,22 @@ p0:
 ${p}
 sigma p:
 ${sigmap}
-Left box boundary:
+Left boundary:
 -20.0
-Right box boundary:
-20.0
-Left interaction region boundary:
--10.0
-Right interaction region boundary:
-10.0
+Right boundary:
+60.0
 Upper limit of dx:
 1.0
-Upper limit of dt:
-1.0
+Absorb potential: (on, off)
+off
 Total time of evolution:
 100000.0
 Output period:
 100.0
 Phase space output period:
 5000.0
+Upper limit of dt:
+1.0
 END_FILE
     ./dvr >> output 2>>log
     python plot.py
@@ -49,4 +47,4 @@ END_FILE
     echo $(date +"%Y-%m-%d %H:%M:%S.%N")
 done
 rm t.txt x.txt
-mv output log result
+mv output log ${folder}
