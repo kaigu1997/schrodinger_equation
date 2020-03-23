@@ -6,7 +6,7 @@ HeaderFile := matrix.h general.h pes.h
 all: dvr
 
 dvr: ${Objects}
-	${Compiler} ${Objects} ${MakeFlags} -o dvr
+	${Compiler} ${Objects} ${MakeFlags} -fuse-ld=gold -o dvr
 main.o: main.cpp ${HeaderFile}
 	${Compiler} -c main.cpp ${MakeFlags} -g -o main.o
 pes.o: pes.cpp ${HeaderFile}

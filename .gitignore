@@ -1,10 +1,15 @@
+# ELF files
 *.o
+dvr
+
+# output and input
 *.txt
 *.png
 *.gif
 log
 output
 input
-dvr
-.vscode/
+
+# IDE configurations
+.vs*/
 *result*/
