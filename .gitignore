@@ -13,3 +13,10 @@ input
 # IDE configurations
 .vs*/
 *result*/
+*.sln
+*.vcxproj*
+
+# Doxygen document
+Doxyfile*
+html/
+latex/

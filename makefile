@@ -1,30 +1,29 @@
-Compiler := icpc
-MakeFlags := -mkl -std=c++17 -Wall -Wextra -Wconversion -Wshadow -Werror -O3
+CXX := icpc
+WARNINGFLAGS := -Wall -Wextra -Wconversion -Wshadow -Werror
+CXXFLAGS := ${WARNINGFLAGS} -mkl -std=c++17 -fast -g3 -fopenmp
+LDFLAGS := ${WARNINGFLAGS} -mkl -std=c++17 -ipo -Ofast -xHost -Wl,-fuse-ld=gold -g3 -fopenmp
+LDLIBS := -lpthread
 Objects := matrix.o general.o pes.o main.o
 HeaderFile := matrix.h general.h pes.h
 
-all: dvr
+.PHONY: all
+all: dvr 
 
 dvr: ${Objects}
-	${Compiler} ${Objects} ${MakeFlags} -fuse-ld=gold -o dvr
+	${CXX} ${Objects} ${LDFLAGS} -o dvr ${LDLIBS}
 main.o: main.cpp ${HeaderFile}
-	${Compiler} -c main.cpp ${MakeFlags} -g -o main.o
+	${CXX} -c main.cpp ${CXXFLAGS} -o main.o
 pes.o: pes.cpp ${HeaderFile}
-	${Compiler} -c pes.cpp ${MakeFlags} -g -o pes.o
+	${CXX} -c pes.cpp ${CXXFLAGS} -o pes.o
 general.o: general.cpp ${HeaderFile}
-	${Compiler} -c general.cpp ${MakeFlags} -g -o general.o
+	${CXX} -c general.cpp ${CXXFLAGS} -o general.o
 matrix.o: matrix.cpp matrix.h
-	${Compiler} -c matrix.cpp ${MakeFlags} -g -o matrix.o
+	${CXX} -c matrix.cpp ${CXXFLAGS} -o matrix.o
 
 .PHONY: clean
 clean:
-	-rm *.o
+	-\rm *.o
 
-.PHONY: clean_result
-clean_result:
-	-rm log output *.txt *.png *.gif
-
-.PHONY: git
-git:
-	git add *.h *.cpp makefile *.sh *.py .gitignore
-
+.PHONY: distclean
+distclean:
+	\rm -rf -- log output *.txt *.png *.gif *.o dvr
