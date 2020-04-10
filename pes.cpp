@@ -6,119 +6,86 @@
 #include "matrix.h"
 #include "pes.h"
 
-/*Model 1
-// constants in the diabatic Potential
-static const double A = 0.01, B = 1.6, C = 0.005, D = 1.0;
-// subsystem diabatic Potential, the force, and hessian
-// the "forces" are negative derivative over x
-// the hessian matrix is the second derivative over x
-RealMatrix DiaPotential(const double x)
+
+
+// Diabatic reprersentation
+// parameters of Tully's 1st model, Simple Avoided Crossing (SAC)
+static const double SAC_A = 0.01; ///< A in SAC model
+static const double SAC_B = 1.6; ///< B in SAC model
+static const double SAC_C = 0.005; ///< C in SAC model
+static const double SAC_D = 1.0; ///< D in SAC model
+// parameters of Tully's 2nd model, Dual Avoided Crossing (DAC)
+static const double DAC_A = 0.10; ///< A in DAC model
+static const double DAC_B = 0.28; ///< B in DAC model
+static const double DAC_C = 0.015; ///< C in DAC model
+static const double DAC_D = 0.06; ///< D in DAC model
+static const double DAC_E = 0.05; ///< E in DAC model
+// parameters of Tully's 3rd model, Extended Coupling with Reflection (ECR)
+static const double ECR_A = 6e-4; ///< A in ECR model
+static const double ECR_B = 0.10; ///< B in ECR model
+static const double ECR_C = 0.90; ///< C in ECR model
+
+/// Subsystem diabatic Hamiltonian, being the potential of the bath
+RealMatrix diabatic_potential(const double x)
 {
     RealMatrix Potential(NumPES);
-    Potential(0, 1) = Potential(1, 0) = C * exp(-D * x * x);
-    Potential(0, 0) = sgn(x) * A * (1.0 - exp(-sgn(x) * B * x));
-    Potential(1, 1) = -Potential(0, 0);
+    switch (TestModel)
+    {
+    case SAC: // Tully's 1st model
+        Potential[0][1] = Potential[1][0] = SAC_C * exp(-SAC_D * x * x);
+        Potential[0][0] = sgn(x) * SAC_A * (1.0 - exp(-sgn(x) * SAC_B * x));
+        Potential[1][1] = -Potential[0][0];
+        break;
+    case DAC: // Tully's 2nd model
+        Potential[0][1] = Potential[1][0] = DAC_C * exp(-DAC_D * x * x);
+        Potential[1][1] = DAC_E - DAC_A * exp(-DAC_B * x * x);
+        break;
+    case ECR: // Tully's 3rd model
+        Potential[0][0] = ECR_A;
+        Potential[1][1] = -ECR_A;
+        Potential[0][1] = Potential[1][0] = ECR_B * (1 - sgn(x) * (exp(-sgn(x) * ECR_C * x) - 1));
+        break;
+    }
     return Potential;
 }
-static RealMatrix DiaForce(const double x)
-{
-    RealMatrix Force(NumPES);
-    Force(0, 1) = Force(1, 0) = 2.0 * C * D * x * exp(-D * x * x);
-    Force(0, 0) = -A * B * exp(-sgn(x) * B * x);
-    Force(1, 1) = -Force(0, 0);
-    return Force;
-}
-static RealMatrix DiaHesse(const double x)
-{
-    RealMatrix Hesse(NumPES);
-    Hesse(0, 1) = Hesse(1, 0) = 2 * C * D * (2 * D * x * x - 1) * exp(-D * x * x);
-    Hesse(0, 0) = -sgn(x) * A * B * B * exp(-sgn(x) * B * x);
-    Hesse(1, 1) = -Hesse(0, 0);
-    return Hesse;
-}// */
 
-//*Model 2
-// constants in the diabatic Potential
-static const double A = 0.10, B = 0.28, C = 0.015, D = 0.06, E = 0.05;
-// subsystem diabatic Potential, the force, and hessian
-// the "forces" are negative derivative over x
-// the hessian matrix is the second derivative over x
-RealMatrix DiaPotential(const double x)
-{
-    RealMatrix Potential(NumPES);
-    Potential(0, 1) = Potential(1, 0) = C * exp(-D * x * x);
-    Potential(1, 1) = E - A * exp(-B * x * x);
-    return Potential;
-}
-static RealMatrix DiaForce(const double x)
-{
-    RealMatrix Force(NumPES);
-    Force(0, 1) = Force(1, 0) = 2 * C * D * x * exp(-D * x * x);
-    Force(1, 1) = -2 * A * B * x * exp(-B * x * x);
-    return Force;
-}
-static RealMatrix DiaHesse(const double x)
-{
-    RealMatrix Hesse(NumPES);
-    Hesse(0, 1) = Hesse(1, 0) = 2 * C * D * (2 * D * x * x - 1) * exp(-D * x * x);
-    Hesse(1, 1) = -2 * A * B * (2 * B * x * x - 1) * exp(-B * x * x);
-    return Hesse;
-}// */
+static const double c = sqrt(2) * comp_ellint_1(1.0 / sqrt(2)); ///< the constant used in absorbing potential
 
-/*Model 3
-// constants in the diabatic Potential
-static const double A = 6e-4, B = 0.10, C = 0.90;
-// subsystem diabatic Potential, the force, and hessian
-// the "forces" are negative derivative over x
-// the hessian matrix is the second derivative over x
-RealMatrix DiaPotential(const double x)
+/// In the interacting region [xmin, xmax], E is zero 
+///
+/// Otherwise, E=hbar^2/2m*(2*pi/arl)^2*y(x), where
+/// x=2*d*kmin*(r-r1)=c(r-r1)/arl, and
+/// d=c/4pi, so arl=2pi/kmin=h/pmin.
+///
+/// Here, the r is the parameter x in the function call
+///
+/// y(x)=sqrt(pow(cn(x/sqrt(2),1/sqrt(2)),-4)-1)
+/// ~4/(c-x)^2+4/(c+x)^2-8/c^2 from
+/// J. Chem. Phys., 2004, 120(5): 2247-2254,
+///
+/// c=sqrt(2)*K(1/sqrt(2))
+double absorbing_potential
+(
+    const double mass,
+    const double xmin,
+    const double xmax,
+    const double AbsorbingRegionLength,
+    const double x
+)
 {
-    RealMatrix Potential(NumPES);
-    Potential(0, 0) = A;
-    Potential(1, 1) = -A;
-    Potential(0, 1) = Potential(1, 0) = B * (1 - sgn(x) * (exp(-sgn(x) * C * x) - 1));
-    return Potential;
-}
-static RealMatrix DiaForce(const double x)
-{
-    RealMatrix Force(NumPES);
-    Force(0, 1) = Force(1, 0) = -B * C * exp(-sgn(x) * C * x);
-    return Force;
-}
-static RealMatrix DiaHesse(const double x)
-{
-    RealMatrix Hesse(NumPES);
-    Hesse(0, 1) = Hesse(1, 0) = -sgn(x) * B * C * C * exp(-sgn(x) * C * x);
-    return Hesse;
-}// */
-
-// the absorbing potential: V->V-iE
-// Here is E only. E is diagonal
-// E is zero in the interacting region
-// E=hbar^2/2m*(2*pi/arl)^2*y(x)
-// x=2*d*kmin*(r-r1)=c(r-r1)/arl
-// d=c/4pi -> arl=2pi/kmin=h/pmin
-// y(x)=sqrt(pow(cn(x/sqrt(2),1/sqrt(2)),-4)-1)
-// ~4/(c-x)^2+4/(c+x)^2-8/c^2 from
-// J. Chem. Phys., 2004, 120(5): 2247-2254,
-// c=sqrt(2)*K(1/sqrt(2))
-double AbsorbPotential(const double mass, const double xmin, const double xmax, const double AbsorbingRegionLength, const double r)
-{
-    static const double c = sqrt(2) * comp_ellint_1(1.0 / sqrt(2));
     // in the interacting region, no AP
-    if (r > xmin && r < xmax)
+    if (x > xmin && x < xmax)
     {
         return 0;
     }
     // otherwise, return E(x)_ii
-    double x = c * (r < xmin ? r - xmin : r - xmax) / AbsorbingRegionLength;
+    const double xx = c * (x < xmin ? x - xmin : x - xmax) / AbsorbingRegionLength;
     return pow(PlanckH / AbsorbingRegionLength, 2) * 2.0 / mass
-        * (1.0 / pow(c - x, 2) + 1.0 / pow(c + x, 2) - 2.0 / pow(c, 2));
+        * (1.0 / pow(c - xx, 2) + 1.0 / pow(c + xx, 2) - 2.0 / pow(c, 2));
 }
 
-// transformation matrix from diabatic state to adiabatic state
-// i.e. M*psi(dia)=psi(adia), which diagonalize PES only (instead of diagonal H)
-ComplexMatrix DiaToAdia(const int NGrids, const double* GridCoordinate)
+/// i.e. C^T*psi(dia)=psi(adia), which diagonalize PES only (instead of diagonal H)
+ComplexMatrix diabatic_to_adiabatic(const int NGrids, const double* GridCoordinate)
 {
     ComplexMatrix TransformationMatrix(NGrids * NumPES);
     // EigVal stores the eigenvalues
@@ -128,7 +95,7 @@ ComplexMatrix DiaToAdia(const int NGrids, const double* GridCoordinate)
     {
         // EigVec stores the V before diagonalization and 
         // transformation matrix after diagonalization
-        RealMatrix EigVec = DiaPotential(GridCoordinate[i]);
+        RealMatrix EigVec = diabatic_potential(GridCoordinate[i]);
         // diagonal each grid
         if (LAPACKE_dsyev(LAPACK_ROW_MAJOR, 'V', 'U', NumPES, EigVec.data(), NumPES, EigVal) > 0)
         {
@@ -140,7 +107,7 @@ ComplexMatrix DiaToAdia(const int NGrids, const double* GridCoordinate)
         {
             for (int k = 0; k < NumPES; k++)
             {
-                TransformationMatrix(j * NGrids + i, k * NGrids + i) = EigVec(j, k);
+                TransformationMatrix[j * NGrids + i][k * NGrids + i] = EigVec[j][k];
             }
         }
     }
