@@ -15,25 +15,21 @@ do
 mass:
 ${mass}
 x0:
--10.0
+-8.0
 p0:
 ${p}
 sigma p:
 ${sigmap}
 Left boundary:
--20.0
+-15.0
 Right boundary:
-60.0
+15.0
 Upper limit of dx:
 1.0
 Absorb potential: (on, off)
 off
-Total time of evolution:
-100000.0
 Output period:
-100.0
-Phase space output period:
-5000.0
+50.0
 Upper limit of dt:
 1.0
 END_FILE
