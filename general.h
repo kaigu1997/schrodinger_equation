@@ -107,7 +107,8 @@ ComplexMatrix Hamiltonian_construction
 /// @param p0 the initial average momentum
 /// @param SigmaX the initial standard deviation of position. SigmaP is not needed due to the minimum uncertainty principle
 /// @param psi the wavefunction to be initialized in adiabatic representation
-void wavefunction_initialization(
+void wavefunction_initialization
+(
     const int NGrids,
     const double* const GridCoordinate,
     const double dx,

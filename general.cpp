@@ -160,15 +160,24 @@ ComplexMatrix Hamiltonian_construction
 /// as the wavefunction is on grid, the normalization factor could be different
 ///
 /// this function is also only called once, for initialization of the adiabatic wavefunction
-void wavefunction_initialization(const int NGrids, const double* GridCoordinate, const double dx, const double x0, const double p0, const double SigmaX, Complex* psi)
+void wavefunction_initialization
+(
+    const int NGrids,
+    const double* const GridCoordinate,
+    const double dx,
+    const double x0,
+    const double p0,
+    const double SigmaX,
+    Complex* const Psi
+)
 {
     // for higher PES, the initial wavefunction is zero
-    memset(psi + NGrids, 0, NGrids * (NumPES - 1) * sizeof(Complex));
+    memset(Psi + NGrids, 0, NGrids * (NumPES - 1) * sizeof(Complex));
     // for ground state, it is a gaussian. psi(x)=A*exp(-(x-x0)^2/4sigmax^2+ip0x/hbar)
     for (int i = 0; i < NGrids; i++)
     {
         const double& x = GridCoordinate[i];
-        psi[i] = exp(-pow((x - x0) / 2 / SigmaX, 2) + p0 * x / hbar * 1.0i) / sqrt(sqrt(2.0 * pi) * SigmaX);
+        Psi[i] = exp(-pow((x - x0) / 2 / SigmaX, 2) + p0 * x / hbar * 1.0i) / sqrt(sqrt(2.0 * pi) * SigmaX);
     }
     // normalization
     Complex PsiSquare;
@@ -176,16 +185,16 @@ void wavefunction_initialization(const int NGrids, const double* GridCoordinate,
     cblas_zdotc_sub
     (
         NGrids,
-        psi,
+        Psi,
         1,
-        psi,
+        Psi,
         1,
         &PsiSquare
     );
     const double NormFactor = sqrt(PsiSquare.real() * dx);
     for (int i = 0; i < NGrids; i++)
     {
-        psi[i] /= NormFactor;
+        Psi[i] /= NormFactor;
     }
 }
 
@@ -380,10 +389,10 @@ void output_phase_space_distribution
 (
     ostream& os,
     const int NGrids,
-    const double* GridCoordinate,
+    const double* const GridCoordinate,
     const double dx,
     const double p0,
-    const Complex* psi
+    const Complex* const psi
 )
 {
     const double pmin = p0 - pi * hbar / dx;
@@ -424,8 +433,8 @@ void calculate_population
 (
     const int NGrids,
     const double dx,
-    const Complex* Psi,
-    double* Population
+    const Complex* const Psi,
+    double* const Population
 )
 {
     Complex InnerProduct;
@@ -494,7 +503,7 @@ tuple<double, double, double> calculate_average
         dx,
         mass
     );
-    static Complex* MatMul = new Complex[NumPES];
+    static Complex* MatMul = new Complex[dim];
     Complex result;
     double x = 0.0, p = 0.0, E = 0.0;
     // first, <E>

@@ -85,7 +85,7 @@ double absorbing_potential
 }
 
 /// i.e. C^T*psi(dia)=psi(adia), which diagonalize PES only (instead of diagonal H)
-ComplexMatrix diabatic_to_adiabatic(const int NGrids, const double* GridCoordinate)
+ComplexMatrix diabatic_to_adiabatic(const int NGrids, const double* const GridCoordinate)
 {
     ComplexMatrix TransformationMatrix(NGrids * NumPES);
     // EigVal stores the eigenvalues

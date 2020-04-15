@@ -309,14 +309,7 @@ int main(void)
             LastE = AverageE;
             LastX = AverageX;
             LastP = AverageP;
-            cblas_dcopy
-            (
-                NumPES,
-                Population,
-                1,
-                OldPopulation,
-                1
-            );
+            memcpy(OldPopulation, Population, NumPES * sizeof(double));
         }
 
         // evolve
