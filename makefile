@@ -22,8 +22,8 @@ matrix.o: matrix.cpp matrix.h
 
 .PHONY: clean
 clean:
-	-\rm *.o
+	\rm -f *.o
 
 .PHONY: distclean
-distclean:
-	\rm -rf -- log output *.txt *.png *.gif *.o dvr
+distclean: clean
+	\rm -rf -- *log *out* input *.txt *.png *.gif dvr

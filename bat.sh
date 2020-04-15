@@ -1,7 +1,7 @@
 #!/bin/bash
 make
 make clean
-folder = "result"
+folder="result"
 if [ ! -d ${folder} ]; then
     mkdir ${folder}
 fi

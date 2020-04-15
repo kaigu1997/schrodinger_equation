@@ -1,8 +1,8 @@
 import numpy as np
 import matplotlib
+matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 from matplotlib import animation
-matplotlib.use('TkAgg')
 
 # read input grid and time
 def read_input():
