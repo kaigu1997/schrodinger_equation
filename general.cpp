@@ -203,11 +203,11 @@ Evolution::Evolution
     Intermediate1(new Complex[dim]),
     Intermediate2(new Complex[dim]),
     PsiAtTimeT(new Complex[dim]),
-    EigVec(DiaH),
+    EigVec(Hamiltonian),
     EigVal(new double[dim]),
     dt(TimeStep),
-    RK4kBeta(dt / RK4Parameter),
-    RK4PsiAlpha(dt / 6.0 * RK4Parameter)
+    RK4kBeta(Complex(dt) / RK4Parameter),
+    RK4PsiAlpha(Complex(dt / 6.0) * RK4Parameter)
 {
     if (Absorbed == true)
     {

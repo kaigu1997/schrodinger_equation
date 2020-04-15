@@ -124,12 +124,12 @@ private:
     // general variables
     const bool Absorbed; ///< whether have absorbing potential or not
     const int dim; ///< the number of grids / the size of Hamiltonian
-    const ComplexMatrix Hamiltonian; ///< the Hamiltonain Matrix
+    ComplexMatrix Hamiltonian; ///< the Hamiltonain Matrix
     Complex* Intermediate1; ///< No ABC, psi_diag(0); with ABC, (psi(t)+k[i-1]*dt/n)/ihbar
     Complex* Intermediate2; ///< No ABC, psi_diag(t); with ABC, H*(psi(t)+k[i-1]*dt/n)/ihbar
     Complex* PsiAtTimeT; /// wavefunction at time t; the evolved result
     // used when Absorbed == true
-    ComplexMatrix EigVec; ///< the eigenvectors of Hamiltonian, the basis transformation matrix
+    ComplexMatrix& EigVec; ///< the eigenvectors of Hamiltonian, the basis transformation matrix
     double* EigVal; ///< the eigenvalues of Hamiltonian, the diagonalized Hamiltonian
     // used when Absorbed == false
     const double dt; ///< time step
