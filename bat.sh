@@ -6,7 +6,12 @@ if [ ! -d ${folder} ]; then
     mkdir ${folder}
 fi
 mass=2000.0
-for (( i=-40;i<=10;i=i+1 ))
+x0=-8.0
+xmax=15.0
+dx=1.0
+output=50.0
+dt=1.0
+for (( i=-30;i<=10;i=i+1 ))
 do
 #    p=$(echo "scale=1;$i/10.0"|bc)
     p=$(echo "sqrt(2.0*${mass}*e(${i}/10.0))"|bc -l)
@@ -15,32 +20,33 @@ do
 mass:
 ${mass}
 x0:
--8.0
+${x0}
 p0:
 ${p}
 sigma p:
 ${sigmap}
 Left boundary:
--15.0
+-${xmax}
 Right boundary:
-15.0
+${xmax}
 Upper limit of dx:
-1.0
+${dx}
 Absorb potential: (on, off)
 off
 Output period:
-50.0
+${output}
 Upper limit of dt:
-1.0
+${dt}
 END_FILE
     ./dvr >> output 2>>log
-    python plot.py
-    for f in psi.*
+    python plot_psi.py
+    python plot_phase.py
+    for f in *.txt *.png *.gif input
     do
-        mv -- "$f" "${folder}/${i}.${f#psi.}"
+        mv -- "${f}" "${folder}/${i}.${f}"
     done
     echo "Finished 10.0 * lnE = $i.0"
     echo $(date +"%Y-%m-%d %H:%M:%S.%N")
 done
-rm t.txt x.txt
+rm input
 mv output log ${folder}

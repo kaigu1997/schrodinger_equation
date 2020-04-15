@@ -88,23 +88,33 @@ int main(void)
     const int AbsorbingGrid = static_cast<int>(AbsorbingRegionLength / dx);
     // NGrids: number of grids in [xmin-arl, xmax+arl]
     const int NGrids = InteractingGrid + 2 * AbsorbingGrid;
-
     // dim: total number of elements (dimension) in Psi/H
     const int dim = NGrids * NumPES;
+
     // the coordinates of the grids, i.e. value of xi
     double* GridCoordinate = new double[NGrids];
-    // Grids contains each grid coordinate, one in a line
-    ofstream Grids("x.txt");
-    Grids.sync_with_stdio(false);
+    // XGrids contains each grid coordinate, one in a line
+    ofstream XGrids("x.txt");
+    XGrids.sync_with_stdio(false);
+    // PGrids contains the calculated p values in the phase space distribution
+    ofstream PGrids("p.txt");
+    PGrids.sync_with_stdio(false);
+    // pmin and pmax are the minimum/maximum calculate p value in the phase space distribution
+    // they are centered at p0, dp=pi*hbar/L, Lp=pi*hbar/dx
+    // in main function, they are just to output to the file, and are not passed to any functions
+    const double pmin = p0 - pi * hbar / dx;
+    const double pmax = p0 + pi * hbar / dx;
     // calculate the grid coordinates, and print them
     for (int i = 0; i < NGrids; i++)
     {
         GridCoordinate[i] = xmin + dx * (i - AbsorbingGrid);
-        Grids << GridCoordinate[i] << '\n';
+        XGrids << GridCoordinate[i] << '\n';
+        PGrids << ((NGrids - 1 - i) * pmin + i * pmax) / (NGrids - 1) << '\n';
     }
+    XGrids.close();
+    PGrids.close();
     clog << "dx = " << dx << ", and there is overall " << NGrids << " grids from "
         << GridCoordinate[0] << " to " << GridCoordinate[NGrids - 1] << ".\n";
-    Grids.close();
 
     // read evolving time and output time, in unit of a.u.
     // total time is estimated as a uniform linear motion
