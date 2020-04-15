@@ -209,7 +209,7 @@ Evolution::Evolution
     RK4kBeta(Complex(dt) / RK4Parameter),
     RK4PsiAlpha(Complex(dt / 6.0) * RK4Parameter)
 {
-    if (Absorbed == true)
+    if (Absorbed == false)
     {
         // diagonalization
         const int status = LAPACKE_zheev
