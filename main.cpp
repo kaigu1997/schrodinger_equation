@@ -322,8 +322,8 @@ int main(void)
             memcpy(OldPopulation, Population, NumPES * sizeof(double));
         }
 
-        // evolve
-        EvolveObject.evolve(DiabaticPsi, Time);
+        // evolve to next moment
+        EvolveObject.evolve(DiabaticPsi, Time + dt);
     }
 
 
