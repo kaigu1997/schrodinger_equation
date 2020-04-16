@@ -39,8 +39,9 @@ Upper limit of dt:
 ${dt}
 END_FILE
     ./dvr >> output 2>>log
-    python plot_psi.py
-    python plot_phase.py
+    python plot_psi.py &
+    python plot_phase.py &
+    wait
     for f in *.txt *.png *.gif input
     do
         mv -- "${f}" "${folder}/${i}.${f}"
@@ -48,5 +49,4 @@ END_FILE
     echo "Finished 10.0 * lnE = $i.0"
     echo $(date +"%Y-%m-%d %H:%M:%S.%N")
 done
-rm input
 mv output log ${folder}
