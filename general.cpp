@@ -365,7 +365,7 @@ void Evolution::evolve(Complex* Psi, const double Time)
 /// output each element's modular square in a line, separated with space, w/ \n @ eol
 void output_grided_population(ostream& os, const int NGrids, const Complex* const Psi)
 {
-    for (int i = 0; i < NGrids; i++)
+    for (int i = 0; i < NGrids * NumPES; i++)
     {
         os << ' ' << (Psi[i] * conj(Psi[i])).real();
     }
@@ -395,8 +395,8 @@ void output_phase_space_distribution
     const Complex* const psi
 )
 {
-    const double pmin = p0 - pi * hbar / dx;
-    const double pmax = p0 + pi * hbar / dx;
+    const double pmin = p0 - pi * hbar / dx / 2.0;
+    const double pmax = p0 + pi * hbar / dx / 2.0;
     // Wigner Transformation: P(x,p)=int{dy*exp(2ipy/hbar)<x-y|rho|x+y>}/(pi*hbar)
     // the interval of p is p0+pi*hbar/dx*[-1,1), dp=2*pi*hbar/(xmax-xmin)
     // loop over pes first
@@ -412,11 +412,11 @@ void output_phase_space_distribution
                 {
                     const double p = ((NGrids - 1 - pj) * pmin + pj * pmax) / (NGrids - 1);
                     // do the numerical integral
-                    Complex integral(0.0, 0.0);
+                    Complex integral = 0.0;
                     // 0 <= (x+y, x-y) < NGrids 
                     for (int yk = max(-xi, xi + 1 - NGrids); yk <= min(xi, NGrids - 1 - xi); yk++)
                     {
-                        const double y = GridCoordinate[0] + yk * dx;
+                        const double y = yk * dx;
                         integral += exp(2.0 * p * y / hbar * 1.0i) * psi[xi - yk + iPES * NGrids] * conj(psi[xi + yk + jPES * NGrids]);
                     }
                     integral *= dx / pi / hbar;

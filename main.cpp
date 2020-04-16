@@ -102,8 +102,8 @@ int main(void)
     // pmin and pmax are the minimum/maximum calculate p value in the phase space distribution
     // they are centered at p0, dp=pi*hbar/L, Lp=pi*hbar/dx
     // in main function, they are just to output to the file, and are not passed to any functions
-    const double pmin = p0 - pi * hbar / dx;
-    const double pmax = p0 + pi * hbar / dx;
+    const double pmin = p0 - pi * hbar / dx / 2.0;
+    const double pmax = p0 + pi * hbar / dx / 2.0;
     // calculate the grid coordinates, and print them
     for (int i = 0; i < NGrids; i++)
     {
